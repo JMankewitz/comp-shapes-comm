@@ -15,7 +15,4 @@ export default class Task extends React.Component {
       activeButton: false
     };
   }
-
-  render() {
-
 }

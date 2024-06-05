@@ -1,0 +1,34 @@
+factors:
+    - name: showNegativeFeedback
+      values:
+        - value: 1
+        - value: 0
+    - name: selectionDuration
+      values:
+        - value: 60
+    - name: contextStructure
+      values:
+        - value: noncomp
+        - value: comp-within
+        - value: comp-between
+    - name: contextSize
+      values:
+        - value: 9
+        - value: 4
+    - name: playerCount
+      desc: playerCount determines the number of Players are in a Game.
+      values:
+        - value: 2
+    - name: numRepetitionsWithPartner
+      values:
+        - value: 6
+        - value: 4
+treatments:
+    - name: demo
+      factors:
+        contextSize: 4
+        contextStructure: noncomp
+        numRepetitionsWithPartner: 4
+        playerCount: 2
+        selectionDuration: 60
+        showNegativeFeedback: 1

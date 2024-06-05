@@ -1,18 +1,28 @@
 import {
+  useGame,
   usePlayer,
   usePlayers,
   useRound,
+  useStage
 } from "@empirica/core/player/classic/react";
+import _ from "lodash";
+
 import { Loading } from "@empirica/core/player/react";
 import React from "react";
 import { Tangram } from "./components/Tangram.jsx";
 
 export function Task() {
+  const game = useGame();
   const player = usePlayer();
   const players = usePlayers();
   const round = useRound();
-  const target = round.get("target")
-  const tangramURLs = player.get('tangramURLs');
+  const stage = useStage();
+  
+  
+  const target = round.get("target") // list of top and bottom shapes
+  const tangramURLs = round.get("tangramURLs")
+
+
   const correct = player.get('clicked') == target;
   let tangramsToRender;
   if (tangramURLs) {
@@ -25,6 +35,7 @@ export function Task() {
         stage={stage}
         game={game}
         player={player}
+        players={players}
         target={target}
       />
     ));
@@ -38,11 +49,11 @@ export function Task() {
     <div className="task">
       <div className="board">
         <div className="header" style={{display:'flex'}}>
-          <h1 className="roleIndicator" style={{'float': 'left', 'margin-left': '50px'}}> You are the {player.get('role')}.</h1>
-          <h3 className="feedbackIndicator" style={{'float': 'left', 'margin-left': '50px', 'margin-top': 'auto', 'margin-bottom': 'auto'}}><>{feedback}</></h3>
+          <h1 className="roleIndicator" style={{'float': 'left', 'marginLeft': '50px'}}> You are the {player.get('role')}.</h1>
+          <h3 className="feedbackIndicator" style={{'float': 'left', 'marginLeft': '50px', 'marginTop': 'auto', 'marginBottom': '50px'}}><>{feedback}</></h3>
         </div>
         <div className="all-tangrams">
-          <div className="tangrams">
+          <div className="tangrams grid">
             {tangramsToRender}
           </div>
         </div>
