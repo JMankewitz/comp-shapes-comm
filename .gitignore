@@ -1,7 +1,6 @@
 ## ignoring by default
 .DS_Store
 .ipynb_checkpoints/
-*.csv
 
 *.ai
 *.aux
@@ -46,19 +45,6 @@ __pycache__/
 *.synctex.gz
 *.pdf
 
-.DS_Store
-*.csv
-
-*.pdf
-*.png
-*.jpeg
-*.jpg
-*.tiff
-*.svg
-*.eps
-*.ai
-auth.json
-auth.txt
 
 
 # Distribution / packaging
