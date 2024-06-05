@@ -99,9 +99,9 @@ _.times(reps, repNum => {
   
   const tangramURLs = []
   for (let i = 0; i < tangrams.length; i ++ ){
-    tangramURLs.push("/tangrams/" + tangrams[i][0] + "_" + tangrams[i][1] + '.png')
+    tangramURLs.push("../tangrams/" + tangrams[i][0] + "_" + tangrams[i][1] + '.png')
   }
-  const targetURL = "/tangrams/" + target[0] + "_" + target[1] + '.png'
+  const targetURL = "../tangrams/" + target[0] + "_" + target[1] + '.png'
 
     const round = game.addRound({
       target: targetURL,
