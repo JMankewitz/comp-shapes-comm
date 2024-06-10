@@ -3,8 +3,6 @@ import { ClassicListenersCollector } from "@empirica/core/admin/classic";
 export const Empirica = new ClassicListenersCollector();
 
 
-const topTangrams = _.range(16);
-const bottomTangrams = _.range(start = 16, end = 32);
 
 const names = [
 "Repi",
@@ -36,22 +34,35 @@ game.set("showNegativeFeedback", treatment.showNegativeFeedback);
 game.set("contextSize", treatment.contextSize);
 
 game.set("contextStructure", treatment.contextStructure)
-game.set("topTangrams", topTangrams)
-game.set("bottomTangrams", bottomTangrams)
+
+let topTangrams = []
+let bottomTangrams = []
 
 const targetTangrams = []
 if (game.get("contextStructure") == "noncomp") {
+  topTangrams = _.range(16);
+  bottomTangrams = _.range(start = 16, end = 32);
   for (let i = 0; i < 16; i++){
     targetTangrams.push([topTangrams[i], bottomTangrams[i]])
     }
+
    } else {
+    topTangrams = _.range(4);
+    bottomTangrams = _.range(start = 16, end = 20);
+    
      for (let i = 0; i < game.get("contextSize"); i++){
-    for (j = 0; j < game.get("contextSize"); j++){
+      for (j = 0; j < game.get("contextSize"); j++){
       targetTangrams.push([topTangrams[i], bottomTangrams[j]])
     }
   }
   }
+  
+game.set("topTangrams", topTangrams)
+game.set("bottomTangrams", bottomTangrams)
 
+console.log(topTangrams)
+console.log(bottomTangrams)
+console.log(targetTangrams)
 game.set('targets', targetTangrams)
 
 // initialize players
@@ -95,7 +106,24 @@ _.times(reps, repNum => {
       const contrast_tangrams = _.sampleSize(non_target_alternatives, game.get("contextSize")-1)
       //console.log(non_target_alternatives)
       tangrams = [target].concat(contrast_tangrams)
-  }
+      tangrams = _.shuffle(tangrams)
+  } else if (game.get("contextStructure") == "comp-within") {
+    // select one non-target top to serve as the top shape and one non-target bottom to serve as the bottom shape
+    const top_alternative = _.sample(topTangrams.filter(x => x != target[0]));
+    const bottom_alternative = _.sample(bottomTangrams.filter(x => x != target[1]));
+    const contrast_tangrams = [[target[0], bottom_alternative], [top_alternative, target[1]], [top_alternative, bottom_alternative]];
+    //console.log(non_target_alternatives)
+    tangrams = [target].concat(contrast_tangrams)
+    tangrams = _.shuffle(tangrams)
+} else {
+  let top_alternatives = _.shuffle(topTangrams.filter(x => x != target[0]));
+  let bottom_alternatives = _.shuffle(bottomTangrams.filter(x => x != target[1]));
+  const contrast_tangrams = [[top_alternatives[0], bottom_alternatives[0]], [top_alternatives[1], bottom_alternatives[1]], [top_alternatives[2], bottom_alternatives[2]]];
+    //console.log(non_target_alternatives)
+    tangrams = [target].concat(contrast_tangrams)
+    tangrams = _.shuffle(tangrams)
+}
+  console.log(tangrams)
   
   const tangramURLs = []
   for (let i = 0; i < tangrams.length; i ++ ){
@@ -105,7 +133,8 @@ _.times(reps, repNum => {
 
     const round = game.addRound({
       target: targetURL,
-      numTrials: reps * numTargets,
+      numTrials: (reps * numTargets) + 1,
+      targetNum: targetNum + 1,
       trialNum : repNum * numTargets + targetNum,
       repNum : repNum,
       tangramURLs: tangramURLs
@@ -126,6 +155,8 @@ const players = round.currentGame.players;
 const chat = round.get("chat") ?? [];
 players.forEach((player, i) => {
   player.set('clicked', '');
+  // swap player roles
+  player.set("role", player.get('role') == 'speaker' ? 'listener' : 'speaker');
 });
 });
 

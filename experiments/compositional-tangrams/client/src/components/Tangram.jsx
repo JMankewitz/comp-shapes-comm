@@ -20,8 +20,8 @@ export function Tangram(props){
         player.get('role') == 'listener') {
       player.set("clicked", tangram)
       partner.set("clicked", tangram)
-      setTimeout(() => player.stage.set("submit", true), 3000);
-      setTimeout(() => partner.stage.set("submit", true), 3000);
+      setTimeout(() => player.stage.set("submit", true), 1000);
+      setTimeout(() => partner.stage.set("submit", true), 1000);
     }
   };
   

@@ -20,13 +20,18 @@ export function Task() {
   
   
   const target = round.get("target") // list of top and bottom shapes
-  const tangramURLs = round.get("tangramURLs")
-
+  let tangramURLs = round.get("tangramURLs");
+  console.log(player.get("role"))
+  let final_tangram_urls = tangramURLs
+  if (player.get("role") == 'speaker'){
+    // reverse order of tangrams
+    final_tangram_urls = tangramURLs.toReversed()
+  } 
 
   const correct = player.get('clicked') == target;
   let tangramsToRender;
-  if (tangramURLs) {
-    tangramsToRender = tangramURLs.map((tangram, i) => (
+  if (final_tangram_urls) {
+    tangramsToRender = final_tangram_urls.map((tangram, i) => (
       <Tangram
         key={tangram}
         tangram={tangram}
@@ -49,7 +54,7 @@ export function Task() {
     <div className="task">
       <div className="board">
         <div className="header" style={{display:'flex'}}>
-          <h1 className="roleIndicator" style={{'float': 'left', 'marginLeft': '50px'}}> You are the {player.get('role')}.</h1>
+          <h2 className="roleIndicator" style={{'float': 'left', 'marginLeft': '50px'}}> You are the <b>{player.get('role')}</b>.</h2>
           <h3 className="feedbackIndicator" style={{'float': 'left', 'marginLeft': '50px', 'marginTop': 'auto', 'marginBottom': '50px'}}><>{feedback}</></h3>
         </div>
         <div className="all-tangrams">

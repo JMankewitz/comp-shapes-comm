@@ -18,7 +18,11 @@ export function Profile() {
     <div className="min-w-lg md:min-w-2xl mt-2 m-x-auto px-3 py-2 text-gray-500 rounded-md grid grid-cols-3 items-center border-.5">
       <div className="leading-tight ml-1">
         <div className="text-gray-600 font-semibold">
-          {round ? round.get("name") : ""}
+        {round ? "Round: " + (round.get("repNum") + 1) + " / 4": ""}
+          
+        </div>
+        <div className="text-gray-600 font-semibold">
+        {round ? "Trial: " + round.get("targetNum") + " / 16" : ""}
         </div>
         <div className="text-empirica-500 font-medium">
           {stage ? stage.get("name") : ""}
