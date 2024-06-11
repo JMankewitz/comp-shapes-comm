@@ -137,6 +137,7 @@ _.times(reps, repNum => {
       targetNum: targetNum + 1,
       trialNum : repNum * numTargets + targetNum,
       repNum : repNum,
+      reps: reps,
       tangramURLs: tangramURLs
     });
 
@@ -173,9 +174,9 @@ players.forEach(player => {
   const selectedAnswer = player.get("clicked");
   const currScore = player.get("bonus") || 0;
   const correctAnswer = target
-  const scoreIncrement = selectedAnswer == correctAnswer ? 0.03 : 0;
+  const scoreIncrement = selectedAnswer == correctAnswer ? .03 : 0;
   player.set("bonus", scoreIncrement + currScore);
-  player.set("score", scoreIncrement*100 + currScore*100)
+  player.set("score", scoreIncrement + currScore)
 });
 
 // Save outcomes as property of round for later export/analysis

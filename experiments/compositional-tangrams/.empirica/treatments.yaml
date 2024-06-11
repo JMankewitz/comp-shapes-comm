@@ -33,21 +33,21 @@ treatments:
         contextStructure: comp-within
         numRepetitionsWithPartner: 2
         playerCount: 2
-        selectionDuration: 20
-        showNegativeFeedback: 1
-    - name: demo-noncomp
-      factors:
-        contextSize: 4
-        contextStructure: noncomp
-        numRepetitionsWithPartner: 4
-        playerCount: 2
-        selectionDuration: 20
+        selectionDuration: 60
         showNegativeFeedback: 1
     - name: demo-comp-between
       factors:
         contextSize: 4
         contextStructure: comp-between
-        numRepetitionsWithPartner: 4
+        numRepetitionsWithPartner: 2
         playerCount: 2
-        selectionDuration: 20
+        selectionDuration: 60
+        showNegativeFeedback: 1
+    - name: demo-noncomp
+      factors:
+        contextSize: 4
+        contextStructure: noncomp
+        numRepetitionsWithPartner: 2
+        playerCount: 2
+        selectionDuration: 60
         showNegativeFeedback: 1

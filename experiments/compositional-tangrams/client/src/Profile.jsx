@@ -18,7 +18,7 @@ export function Profile() {
     <div className="min-w-lg md:min-w-2xl mt-2 m-x-auto px-3 py-2 text-gray-500 rounded-md grid grid-cols-3 items-center border-.5">
       <div className="leading-tight ml-1">
         <div className="text-gray-600 font-semibold">
-        {round ? "Round: " + (round.get("repNum") + 1) + " / 4": ""}
+        {round ? "Round: " + (round.get("repNum") + 1) + " / " + (round.get('reps')): ""}
           
         </div>
         <div className="text-gray-600 font-semibold">
