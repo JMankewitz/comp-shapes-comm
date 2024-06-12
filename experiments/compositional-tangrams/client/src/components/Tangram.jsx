@@ -65,10 +65,12 @@ if (tangram == target) {
         "zIndex" : "9"
       })
     } else {
+      if (player.get("clicked") !== '') {
+
       _.extend(mystyle, {
         "outline" : "10px solid red",
         "zIndex" : "9"
-      })
+      })}
     }
   }
 }

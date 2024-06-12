@@ -57,9 +57,9 @@ export function Task() {
     <div className="task">
       <div className="board">
         <div className="header" style={{display:'flex', flexDirection: 'column', alignItems: 'center'}}>
-          <h2 className="roleIndicator" style={{'float': 'center', 'marginLeft': '50px'}}> You are the <b>{player.get('role')}</b>.</h2>
+          <h2 className="roleIndicator" style={{'float': 'center', 'marginLeft': '50px', fontSize: '20px'}}> You are the <b>{player.get('role')}</b>.</h2>
           {feedback !== '' ? (
-            <h2 className="feedbackIndicator" style={{'float': 'center', 'marginLeft': '50px'}}> {feedback}</h2>
+            <h2 className="feedbackIndicator" style={{'float': 'center', 'marginLeft': '50px', fontSize: '20px'}}> {feedback}</h2>
           ) : (
             <div style={{height: '20px'}}></div>
           )}
