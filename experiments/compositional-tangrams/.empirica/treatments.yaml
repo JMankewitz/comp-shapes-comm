@@ -51,3 +51,11 @@ treatments:
         playerCount: 2
         selectionDuration: 60
         showNegativeFeedback: 1
+    - name: demo-comp-within-quick
+      factors:
+        contextSize: 4
+        contextStructure: comp-within
+        numRepetitionsWithPartner: 2
+        playerCount: 2
+        selectionDuration: 20
+        showNegativeFeedback: 1

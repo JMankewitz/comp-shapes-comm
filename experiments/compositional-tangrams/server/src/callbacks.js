@@ -175,9 +175,9 @@ players.forEach(player => {
   const currScore = player.get("bonus") || 0;
   const correctAnswer = target
   const scoreIncrement = selectedAnswer == correctAnswer ? .03 : 0;
+
   player.set("bonus", scoreIncrement + currScore);
-  player.set("score", scoreIncrement + currScore)
-});
+  player.set("score", scoreIncrement + currScore)});
 
 // Save outcomes as property of round for later export/analysis
 const player1 = players[0]
