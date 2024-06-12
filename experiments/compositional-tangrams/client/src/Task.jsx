@@ -21,7 +21,7 @@ export function Task() {
   
   const target = round.get("target") // list of top and bottom shapes
   let tangramURLs = round.get("tangramURLs");
-  console.log(player.get("role"))
+  //console.log(player.get("role"))
   let final_tangram_urls = tangramURLs
   if (player.get("role") == 'speaker'){
     // reverse order of tangrams
@@ -45,17 +45,25 @@ export function Task() {
       />
     ));
   }
+
+
   let feedback = (
     player.get('clicked') == '' ? '' :
-      correct ? "Correct! You earned 3 points!" :
+      correct ? "Correct! You earned $0.03 cents!" :
       "Ooops, that wasn't the target! You earned no bonus this round."
   )
+
   return (
     <div className="task">
       <div className="board">
-        <div className="header" style={{display:'flex'}}>
-          <h2 className="roleIndicator" style={{'float': 'left', 'marginLeft': '50px'}}> You are the <b>{player.get('role')}</b>.</h2>
-          <h3 className="feedbackIndicator" style={{'float': 'left', 'marginLeft': '50px', 'marginTop': 'auto', 'marginBottom': '50px'}}><>{feedback}</></h3>
+        <div className="header" style={{display:'flex', flexDirection: 'column', alignItems: 'center'}}>
+          <h2 className="roleIndicator" style={{'float': 'center', 'marginLeft': '50px'}}> You are the <b>{player.get('role')}</b>.</h2>
+          {feedback !== '' ? (
+            <h2 className="feedbackIndicator" style={{'float': 'center', 'marginLeft': '50px'}}> {feedback}</h2>
+          ) : (
+            <div style={{height: '20px'}}></div>
+          )}
+          
         </div>
         <div className="all-tangrams">
           <div className="tangrams grid">

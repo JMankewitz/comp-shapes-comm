@@ -14,6 +14,10 @@ export function Profile() {
 
   const score = player.get("score").toFixed(2) || 0;
 
+  if (stage.get("name") == "feedback") {
+    let timer = "--.--"
+  }
+
   return (
     <div className="min-w-lg md:min-w-2xl mt-2 m-x-auto px-3 py-2 text-gray-500 rounded-md grid grid-cols-3 items-center border-.5">
       <div className="leading-tight ml-1">

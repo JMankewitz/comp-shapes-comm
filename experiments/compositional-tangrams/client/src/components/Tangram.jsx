@@ -1,11 +1,11 @@
 import { useStageTimer } from "@empirica/core/player/classic/react";
 import React from "react";
 import _ from "lodash";
-import { useGame } from "@empirica/core/player/classic/react";
+import { useGame, useStage } from "@empirica/core/player/classic/react";
 
 export function Tangram(props){
   const handleClick = e => {
-    console.log('click2')
+    //console.log('click2')
     const { tangram, tangram_num, stage, player, players, round } = props;
     const partnerID = player.get('partner');
     const partner = players.filter((p) => p.id == partnerID)[0];
@@ -20,12 +20,12 @@ export function Tangram(props){
         player.get('role') == 'listener') {
       player.set("clicked", tangram)
       partner.set("clicked", tangram)
-      setTimeout(() => player.stage.set("submit", true), 1000);
-      setTimeout(() => partner.stage.set("submit", true), 1000);
+      player.stage.set("submit", true)
+      partner.stage.set("submit", true)
     }
   };
   
-  const { tangram, round, tangram_num, player, game, target, ...rest } = props;
+  const { tangram, round, tangram_num, stage, player, game, target, ...rest } = props;
 
   const tangramurl = tangram
   const row = 1 + Math.floor(tangram_num / 2)
@@ -45,10 +45,38 @@ export function Tangram(props){
     "marginBottom": "15px"
   };
   
+if (tangram == target) {
+  // selection stage highlight for speaker only
+  if (stage.get("name") == "selection"){
+    // if speaker and hasnt clicked yet...
+    if(player.get('role') == 'speaker' &&
+       (player.get('clicked') == '')) {
+      
+      _.extend(mystyle, {
+        "outline" : "10px solid #000",
+        "zIndex" : "9"
+      }) 
+    }
+  }
+  if (stage.get("name") == "feedback") {
+    if (player.get("clicked") == tangram) {
+      _.extend(mystyle, {
+        "outline" : "10px solid green",
+        "zIndex" : "9"
+      })
+    } else {
+      _.extend(mystyle, {
+        "outline" : "10px solid red",
+        "zIndex" : "9"
+      })
+    }
+  }
+}
+
   // Highlight target object for speaker at selection stage
   // Show it to both players at feedback stage if 'showNegativeFeedback' enabled.
-  if(tangram == target) {
-    console.log(player.get('clicked'));
+/*   if(tangram == target) {
+    //console.log(player.get('clicked'));
     if(player.get('role') == 'speaker' &&
        (player.get('clicked') == '')) {
       
@@ -81,7 +109,7 @@ export function Tangram(props){
       "outline" :  color,
       "zIndex" : "9"
     })
-  }
+  } */
 
   return (
     <div

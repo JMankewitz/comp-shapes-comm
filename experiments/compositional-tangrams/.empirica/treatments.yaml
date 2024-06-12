@@ -21,6 +21,11 @@ factors:
         - value: 60
         - value: 10
         - value: 20
+    - name: feedbackDuration
+      values:
+        - value: 1
+        - value: 3
+        - value: 5
     - name: numRepetitionsWithPartner
       values:
         - value: 6
@@ -55,6 +60,7 @@ treatments:
       factors:
         contextSize: 4
         contextStructure: comp-within
+        feedbackDuration: 3
         numRepetitionsWithPartner: 2
         playerCount: 2
         selectionDuration: 20

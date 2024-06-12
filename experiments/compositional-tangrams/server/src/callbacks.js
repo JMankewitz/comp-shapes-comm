@@ -145,6 +145,10 @@ _.times(reps, repNum => {
       name: "selection",
       duration: treatment.selectionDuration
     });
+    round.addStage({
+      name: "feedback",
+      duration: treatment.feedbackDuration
+    });
   });
 });
 });

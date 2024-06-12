@@ -1,18 +1,23 @@
 import { useStageTimer } from "@empirica/core/player/classic/react";
+import {
+  useStage
+} from "@empirica/core/player/classic/react";
 import React from "react";
 
 export function Timer() {
   const timer = useStageTimer();
+  const stage = useStage();
 
   let remaining;
   if (timer?.remaining || timer?.remaining === 0) {
     remaining = Math.round(timer?.remaining / 1000);
   }
-
+  const time = (stage.get("name") === "selection") ? humanTimer(remaining) : "--:--";
+  
   return (
     <div className="flex flex-col items-center">
       <h1 className="tabular-nums text-3xl text-gray-500 font-semibold">
-        {humanTimer(remaining)}
+        {time}
       </h1>
     </div>
   );
