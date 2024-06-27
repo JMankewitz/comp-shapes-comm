@@ -16,7 +16,7 @@ export function Tangram(props){
     // only register click for listener and only after the speaker has sent a message
     if (stage.get("name") == 'selection' &
         speakerMsgs.length > 0 &
-        player.get('clicked') === '' &
+        player.get('clicked') == '' &
         player.get('role') == 'listener') {
       player.set("clicked", tangram)
       partner.set("clicked", tangram)

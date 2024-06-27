@@ -33,7 +33,7 @@ Empirica.onGameStart(({ game }) => {
   game.set("showNegativeFeedback", treatment.showNegativeFeedback);
   game.set("contextSize", treatment.contextSize);
   game.set("contextStructure", treatment.contextStructure)
-
+  game.set("maxTimeout", treatment.maxTimeout)
   let topTangrams = []
   let bottomTangrams = []
 
@@ -76,7 +76,6 @@ Empirica.onGameStart(({ game }) => {
     player.set("role", i == 0 ? 'speaker' : 'listener'); //first player is always speaker (if overfill there may be multiple listeners??)
     player.set("bonus", 0);
     player.set("score", 0)
-    console.log('resetting interval')
   });
 
   const targets = game.get('targets')
@@ -171,6 +170,7 @@ Empirica.onStageEnded(({ stage }) => {});
 
 Empirica.onRoundEnded(({ round }) => {
   const players = round.currentGame.players;
+  const game = round.currentGame;
   const target = round.get('target');
 
   // Update player scores
@@ -179,24 +179,21 @@ Empirica.onRoundEnded(({ round }) => {
     const currScore = player.get("bonus") || 0;
     const correctAnswer = target
     const scoreIncrement = selectedAnswer == correctAnswer ? .03 : 0;
-
+    const currNumInactive = player.get("numRoundsInactive") || 0;
+    if (player.get("clicked") == '') {
+      player.set("numRoundsInactive", currNumInactive + 1)
+    }
     player.set("bonus", scoreIncrement + currScore);
-    player.set("score", scoreIncrement + currScore)
+    player.set("score", scoreIncrement + currScore);
+    if(player.get("numRoundsInactive") > game.get("maxTimeout")) {
+      //console.log(player.id, " inactive")
+      player.set("ended", "exitSurvey")};
   });
 
   // Save outcomes as property of round for later export/analysis
   const player1 = players[0]
   round.set('response', player1.get('clicked'));
   round.set('correct', target == player1.get('clicked'));
-
-  // check if they've not responded for two consecutive rounds
-  players.forEach((p) => {
-    const inactive = player.get("numRoundsInactive")
-    if(inactive > 2) {
-      player.set("ended", "exitSurvey")
-    }
-  })
-
 
 });
 

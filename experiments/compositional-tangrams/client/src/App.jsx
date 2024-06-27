@@ -4,6 +4,8 @@ import { EmpiricaMenu, EmpiricaParticipant } from "@empirica/core/player/react";
 import React from "react";
 import { Game } from "./Game";
 import { ExitSurvey } from "./intro-exit/ExitSurvey";
+import { IncompleteExitSurvey } from "./intro-exit/IncompleteExitSurvey";
+
 import { Introduction } from "./intro-exit/Introduction";
 import {Consent} from "./intro-exit/Consent"
 
@@ -20,7 +22,12 @@ export default function App() {
   }
 
   function exitSteps({ game, player }) {
-    return [ExitSurvey];
+    if (player.get('ended') === "finished") {
+      return [ExitSurvey];
+    }
+    else {
+      return [IncompleteExitSurvey];
+    }
   }
 
   return (
@@ -28,7 +35,8 @@ export default function App() {
       <div className="h-screen relative">
         <EmpiricaMenu position="bottom-left" />
         <div className="h-full overflow-auto">
-          <EmpiricaContext introSteps={introSteps} exitSteps={exitSteps}>
+          <EmpiricaContext introSteps={introSteps} 
+          exitSteps={exitSteps}>
             <Game />
           </EmpiricaContext>
         </div>

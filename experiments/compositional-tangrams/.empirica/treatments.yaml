@@ -16,11 +16,6 @@ factors:
       desc: playerCount determines the number of Players are in a Game.
       values:
         - value: 2
-    - name: selectionDuration
-      values:
-        - value: 60
-        - value: 10
-        - value: 20
     - name: feedbackDuration
       values:
         - value: 1
@@ -31,19 +26,22 @@ factors:
         - value: 6
         - value: 4
         - value: 2
+    - name: selectionDuration
+      values:
+        - value: 60
+        - value: 10
+        - value: 20
+        - value: 5
+    - name: maxTimeout
+      desc: Number of rounds before a game will end due to inactivity
+      values:
+        - value: 2
 treatments:
-    - name: demo-comp-within
-      factors:
-        contextSize: 4
-        contextStructure: comp-within
-        numRepetitionsWithPartner: 2
-        playerCount: 2
-        selectionDuration: 60
-        showNegativeFeedback: 1
     - name: demo-comp-between
       factors:
         contextSize: 4
         contextStructure: comp-between
+        feedbackDuration: 3
         numRepetitionsWithPartner: 2
         playerCount: 2
         selectionDuration: 60
@@ -52,6 +50,17 @@ treatments:
       factors:
         contextSize: 4
         contextStructure: noncomp
+        feedbackDuration: 3
+        numRepetitionsWithPartner: 2
+        playerCount: 2
+        selectionDuration: 60
+        showNegativeFeedback: 1
+    - name: demo-comp-within
+      factors:
+        contextSize: 4
+        contextStructure: comp-within
+        feedbackDuration: 3
+        maxTimeout: 2
         numRepetitionsWithPartner: 2
         playerCount: 2
         selectionDuration: 60
@@ -61,7 +70,8 @@ treatments:
         contextSize: 4
         contextStructure: comp-within
         feedbackDuration: 3
+        maxTimeout: 2
         numRepetitionsWithPartner: 2
         playerCount: 2
-        selectionDuration: 20
+        selectionDuration: 5
         showNegativeFeedback: 1

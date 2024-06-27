@@ -46,12 +46,32 @@ export function Task() {
     ));
   }
 
+let feedback = '';
 
-  let feedback = (
-    player.get('clicked') == '' ? '' :
-      correct ? "Correct! You earned $0.03 cents!" :
-      "Ooops, that wasn't the target! You earned no bonus this round."
-  )
+if (stage.get('name') == 'feedback') {
+  if (player.get('clicked') == '') {
+    if (player.get('role') == 'speaker') {
+      feedback = "Oops! Your partner did not respond in time."
+    } else {
+      feedback = "Oops! You did not respond in time."
+    }
+    
+  } else {
+    if (correct) {
+      feedback = "Correct! You earned $0.03 cents!"
+    } else {
+      feedback = "Oops, that wasn't the target! You earned no bonus this round."
+    }
+  }
+} else {
+  feedback = '';
+};
+
+// feedback = (
+//     player.get('clicked') == '' ? '' :
+//       correct ? "Correct! You earned $0.03 cents!" :
+//       "Ooops, that wasn't the target! You earned no bonus this round."
+//   )
 
   return (
     <div className="task">
