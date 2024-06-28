@@ -18,7 +18,7 @@ export default function App() {
   const url = `${protocol}//${host}/query`;
 
   function introSteps({ game, player }) {
-    return [Consent, Introduction];
+    return [Consent, Introduction, Quiz];
   }
 
   function exitSteps({ game, player }) {

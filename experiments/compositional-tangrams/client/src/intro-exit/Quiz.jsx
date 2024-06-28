@@ -44,10 +44,10 @@ export function Quiz({next}) {
     {
         question: "At the end of each round... ",
         choices: [
-          "(A) all tangrams are shuffled",
-          "(B) all tangrams stay in the same location",
+          "(A) all shapes are shuffled",
+          "(B) all shapes stay in the same location",
         ],
-        correctAnswer: "(A) all tangrams are shuffled",
+        correctAnswer: "(A) all shapes are shuffled",
       },
       {
         question: "The locations of the 4 objects are the same for the director and the matcher",

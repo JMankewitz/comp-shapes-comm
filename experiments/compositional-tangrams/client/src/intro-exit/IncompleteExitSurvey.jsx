@@ -44,7 +44,7 @@ export function IncompleteExitSurvey({ next }) {
       <Alert title="Bonus">
         <p>
           Please submit the following code to receive your bonus:{" "}
-          <strong>{player.id}</strong>.
+          <strong>C1DOSPNG</strong>.
         </p>
         <p className="pt-1">
           Your final <strong>bonus</strong> is in addition of the{" "}

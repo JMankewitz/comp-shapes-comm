@@ -46,32 +46,33 @@ treatments:
         playerCount: 2
         selectionDuration: 60
         showNegativeFeedback: 1
-    - name: demo-noncomp
+    - name: full-noncomp
       factors:
         contextSize: 4
         contextStructure: noncomp
         feedbackDuration: 3
-        numRepetitionsWithPartner: 2
+        maxTimeout: 2
+        numRepetitionsWithPartner: 4
         playerCount: 2
         selectionDuration: 60
         showNegativeFeedback: 1
-    - name: demo-comp-within
+    - name: full-comp-within
       factors:
         contextSize: 4
         contextStructure: comp-within
         feedbackDuration: 3
         maxTimeout: 2
-        numRepetitionsWithPartner: 2
+        numRepetitionsWithPartner: 4
         playerCount: 2
         selectionDuration: 60
         showNegativeFeedback: 1
-    - name: demo-comp-within-quick
+    - name: full-comp-between
       factors:
         contextSize: 4
-        contextStructure: comp-within
+        contextStructure: comp-between
         feedbackDuration: 3
         maxTimeout: 2
-        numRepetitionsWithPartner: 2
+        numRepetitionsWithPartner: 4
         playerCount: 2
-        selectionDuration: 5
+        selectionDuration: 60
         showNegativeFeedback: 1
