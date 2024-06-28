@@ -23,7 +23,7 @@ export function Task() {
   let tangramURLs = round.get("tangramURLs");
   //console.log(player.get("role"))
   let final_tangram_urls = tangramURLs
-  if (player.get("role") == 'speaker'){
+  if (player.get("role") == 'director'){
     // reverse order of tangrams
     final_tangram_urls = tangramURLs.toReversed()
   } 
@@ -50,7 +50,7 @@ let feedback = '';
 
 if (stage.get('name') == 'feedback') {
   if (player.get('clicked') == '') {
-    if (player.get('role') == 'speaker') {
+    if (player.get('role') == 'director') {
       feedback = "Oops! Your partner did not respond in time."
     } else {
       feedback = "Oops! You did not respond in time."

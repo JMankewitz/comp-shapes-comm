@@ -10,14 +10,14 @@ export function Tangram(props){
     const partnerID = player.get('partner');
     const partner = players.filter((p) => p.id == partnerID)[0];
     const speakerMsgs = _.filter(round.get("chat"), msg => {
-      return msg.sender.id == player.get('partner') && partner.get("role") == 'speaker'
+      return msg.sender.id == player.get('partner') && partner.get("role") == 'director'
     })
 
     // only register click for listener and only after the speaker has sent a message
     if (stage.get("name") == 'selection' &
         speakerMsgs.length > 0 &
         player.get('clicked') == '' &
-        player.get('role') == 'listener') {
+        player.get('role') == 'matcher') {
       player.set("clicked", tangram)
       partner.set("clicked", tangram)
       player.stage.set("submit", true)
@@ -49,7 +49,7 @@ if (tangram == target) {
   // selection stage highlight for speaker only
   if (stage.get("name") == "selection"){
     // if speaker and hasnt clicked yet...
-    if(player.get('role') == 'speaker' &&
+    if(player.get('role') == 'director' &&
        (player.get('clicked') == '')) {
       
       _.extend(mystyle, {
@@ -79,7 +79,7 @@ if (tangram == target) {
   // Show it to both players at feedback stage if 'showNegativeFeedback' enabled.
 /*   if(tangram == target) {
     //console.log(player.get('clicked'));
-    if(player.get('role') == 'speaker' &&
+    if(player.get('role') == 'director' &&
        (player.get('clicked') == '')) {
       
       _.extend(mystyle, {
@@ -87,7 +87,7 @@ if (tangram == target) {
         "zIndex" : "9"
       })
     }
-    if(player.get('role') == 'speaker' &&
+    if(player.get('role') == 'director' &&
        !game.get('showNegativeFeedback') &&
        player.get('clicked') != '') {
       _.extend(mystyle, {
@@ -104,7 +104,7 @@ if (tangram == target) {
     
     const color = (
       tangram == target ? '10px solid green' : (
-        player.get('role') == 'listener' || game.get('showNegativeFeedback')
+        player.get('role') == 'matcher' || game.get('showNegativeFeedback')
       ) ? '10px solid red' : 'none'
     );
     _.extend(mystyle, {

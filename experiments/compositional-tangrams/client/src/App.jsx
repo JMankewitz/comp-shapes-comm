@@ -22,11 +22,11 @@ export default function App() {
   }
 
   function exitSteps({ game, player }) {
-    if (player.get('ended') === "finished") {
-      return [ExitSurvey];
+    if (player.get('ended') === "timeOut") {
+      return [IncompleteExitSurvey];
     }
     else {
-      return [IncompleteExitSurvey];
+      return [ExitSurvey];
     }
   }
 

@@ -73,7 +73,7 @@ Empirica.onGameStart(({ game }) => {
     player.set('name', names[i]);
     player.set("nameColor", nameColors[i]);
     player.set("partner", otherPlayer[0].id)
-    player.set("role", i == 0 ? 'speaker' : 'listener'); //first player is always speaker (if overfill there may be multiple listeners??)
+    player.set("role", i == 0 ? 'director' : 'matcher'); //first player is always speaker (if overfill there may be multiple listeners??)
     player.set("bonus", 0);
     player.set("score", 0)
   });
@@ -160,7 +160,7 @@ Empirica.onRoundStart(({ round }) => {
   players.forEach((player, i) => {
     player.set('clicked', '');
     // swap player roles
-    player.set("role", player.get('role') == 'speaker' ? 'listener' : 'speaker');
+    player.set("role", player.get('role') == 'director' ? 'matcher' : 'director');
   });
 });
 
@@ -180,14 +180,14 @@ Empirica.onRoundEnded(({ round }) => {
     const correctAnswer = target
     const scoreIncrement = selectedAnswer == correctAnswer ? .03 : 0;
     const currNumInactive = player.get("numRoundsInactive") || 0;
+    player.set("bonus", scoreIncrement + currScore);
+    player.set("score", scoreIncrement + currScore);
     if (player.get("clicked") == '') {
       player.set("numRoundsInactive", currNumInactive + 1)
     }
-    player.set("bonus", scoreIncrement + currScore);
-    player.set("score", scoreIncrement + currScore);
     if(player.get("numRoundsInactive") > game.get("maxTimeout")) {
       //console.log(player.id, " inactive")
-      player.set("ended", "exitSurvey")};
+      player.set("ended", "timeOut")};
   });
 
   // Save outcomes as property of round for later export/analysis
