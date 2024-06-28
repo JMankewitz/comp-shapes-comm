@@ -59,9 +59,9 @@ Empirica.onGameStart(({ game }) => {
   game.set("topTangrams", topTangrams)
   game.set("bottomTangrams", bottomTangrams)
 
-  console.log(topTangrams)
-  console.log(bottomTangrams)
-  console.log(targetTangrams)
+  //console.log(topTangrams)
+  //console.log(bottomTangrams)
+  //console.log(targetTangrams)
   game.set('targets', targetTangrams)
 
   // initialize players
@@ -122,7 +122,7 @@ Empirica.onGameStart(({ game }) => {
         tangrams = [target].concat(contrast_tangrams)
         tangrams = _.shuffle(tangrams)
       }
-      console.log(tangrams)
+      //console.log(tangrams)
 
       const tangramURLs = []
       for (let i = 0; i < tangrams.length; i ++ ){
@@ -150,6 +150,7 @@ Empirica.onGameStart(({ game }) => {
       });
     });
   });
+  console.log(game.get("contextStructure")," ", game.id, " started")
 });
 
 Empirica.onRoundStart(({ round }) => {
@@ -186,10 +187,11 @@ Empirica.onRoundEnded(({ round }) => {
       player.set("numRoundsInactive", currNumInactive + 1)
     }
     if(player.get("numRoundsInactive") > game.get("maxTimeout")) {
-      //console.log(player.id, " inactive")
+      console.log(player.id, " inactive")
+      console.log(round.currentGame.id, " ending")
       player.set("ended", "timeOut")};
   });
-
+  console.log(round.get("trialNum"), "/", round.get("numTrials"), " for game ", round.currentGame.id)
   // Save outcomes as property of round for later export/analysis
   const player1 = players[0]
   round.set('response', player1.get('clicked'));

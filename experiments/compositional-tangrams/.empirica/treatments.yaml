@@ -48,36 +48,6 @@ treatments:
         playerCount: 2
         selectionDuration: 60
         showNegativeFeedback: 1
-    - name: full-noncomp
-      factors:
-        contextSize: 4
-        contextStructure: noncomp
-        feedbackDuration: 3
-        maxTimeout: 2
-        numRepetitionsWithPartner: 4
-        playerCount: 2
-        selectionDuration: 60
-        showNegativeFeedback: 1
-    - name: full-comp-within
-      factors:
-        contextSize: 4
-        contextStructure: comp-within
-        feedbackDuration: 3
-        maxTimeout: 2
-        numRepetitionsWithPartner: 4
-        playerCount: 2
-        selectionDuration: 60
-        showNegativeFeedback: 1
-    - name: full-comp-between
-      factors:
-        contextSize: 4
-        contextStructure: comp-between
-        feedbackDuration: 3
-        maxTimeout: 2
-        numRepetitionsWithPartner: 4
-        playerCount: 2
-        selectionDuration: 60
-        showNegativeFeedback: 1
     - name: quick-noncomp
       factors:
         contextSize: 4
@@ -87,4 +57,34 @@ treatments:
         numRepetitionsWithPartner: 2
         playerCount: 2
         selectionDuration: 30
+        showNegativeFeedback: 1
+    - name: full-noncomp
+      factors:
+        contextSize: 4
+        contextStructure: noncomp
+        feedbackDuration: 3
+        maxTimeout: 3
+        numRepetitionsWithPartner: 4
+        playerCount: 2
+        selectionDuration: 60
+        showNegativeFeedback: 1
+    - name: full-comp-between
+      factors:
+        contextSize: 4
+        contextStructure: comp-between
+        feedbackDuration: 3
+        maxTimeout: 3
+        numRepetitionsWithPartner: 4
+        playerCount: 2
+        selectionDuration: 60
+        showNegativeFeedback: 1
+    - name: full-comp-within
+      factors:
+        contextSize: 4
+        contextStructure: comp-within
+        feedbackDuration: 3
+        maxTimeout: 3
+        numRepetitionsWithPartner: 4
+        playerCount: 2
+        selectionDuration: 60
         showNegativeFeedback: 1
