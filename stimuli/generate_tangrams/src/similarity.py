@@ -1,4 +1,4 @@
-from embedding import setup_model, get_image_embedding
+from embedding import setup_model, get_image_embedding, setup_pretrained_model
 from typing import Optional
 import torch
 import matplotlib.pyplot as plt
@@ -32,23 +32,28 @@ class ImageSet:
 
         #embeddings = self.embeddings.mean(dim=1)
         embeddings = self.embeddings
-        normalized = embeddings / embeddings.norm(dim=1, keepdim=True)
+        #normalized = embeddings / embeddings.norm(dim=1, keepdim=True)
         # matmul(A, B.t()) is the full pairwise sim
-        self.similarity_matrix = torch.matmul(normalized, normalized.T)
+        self.similarity_matrix = torch.matmul(embeddings, embeddings.T)
 
     def get_pair_similarity(self, idx1, idx2):
         # get the similarity between any two items
         return self.similarity_matrix[idx1, idx2].item()
     
-    def get_summary_stats(self):
-        # Remove self-similarities from diagonal
+    def get_pairwise_embeddings(self):
         n = len(self.image_paths)
         indices = torch.triu_indices(n, n, offset=1)
         similarities = self.similarity_matrix[indices[0], indices[1]]
+        return(similarities)
+    
+    def get_summary_stats(self):
+        # Remove self-similarities from diagonal
+        similarities = self.get_pairwise_embeddings()
         return {
             'mean_similarity': similarities.mean().item(),
             'min_similarity': similarities.min().item(),
             'max_similarity': similarities.max().item(),
+            'median_similarity': similarities.median().item()
         }
     
     def get_most_similar_pairs(self, n=2):
@@ -123,7 +128,10 @@ class SimilarityAnalysisManager:
         mapping_file,
         image_folder,
         set_type,
-        model_name: str = "openai/clip-vit-base-patch32",
+        repo_id: str = "lil-lab/kilogram-models",
+        file_paths: list = ["clip_controlled/whole+black/model0.pth",
+             "clip_controlled/whole+black/model1.pth",
+             "clip_controlled/whole+black/model2.pth"],
         device: Optional[str] = None
         ):
         self.set_size = 16
@@ -133,9 +141,9 @@ class SimilarityAnalysisManager:
         self.subshapes = self.shapes.iloc[:,1:].values
 
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model, self.preprocess, self.device = setup_model(model_name, self.device)
+        self.model, self.preprocess, self.device = setup_pretrained_model(repo_id, file_paths, self.device)
 
-        self.checkpoint_dir = CHECKPOINTS
+        self.checkpoint_dir = CHECKPOINTS / set_type
 
         self.sets = {}
         self.current_set_id = 0

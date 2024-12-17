@@ -11,6 +11,32 @@ import torch.nn as nn
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
 from PIL import Image
 import clip
+import numpy as np
+
+def setup_pretrained_model(repo_id, file_paths, device):
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    preprocessor = preprocess_for_clip
+    pth_paths = [hf_hub_download(repo_id=repo_id, filename=filename) for filename in file_paths]
+    model_parts = [torch.load(pth_path, map_location=torch.device(device)) for pth_path in pth_paths]
+
+    combined_state_dict = {}
+    for part in model_parts:
+        combined_state_dict.update(part)
+    model = FTCLIP()
+    model.load_state_dict(combined_state_dict['model_state_dict']) ### load the weights into the model
+    return model, preprocessor, device
+
+def preprocess_for_clip(image_path):
+    # CLIP's image preprocessing
+    pil_image = Image.open(image_path)
+    transform = Compose([
+        Resize(224, interpolation=Image.BICUBIC),
+        CenterCrop(224),
+        ToTensor(),
+        Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
+    ])
+
+    return transform(pil_image).unsqueeze(0)
 
 def setup_model(model_name, device):
     device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
@@ -25,12 +51,9 @@ def preprocess_image(image_path, preprocess, device):
 
 def get_image_embedding(image, model, preprocess, device):
     if not isinstance(image, torch.Tensor):
-            image = preprocess_image(image, preprocess, device)
+            image = preprocess_for_clip(image)
     with torch.no_grad():
-            features = model.get_image_features(**image)
-
-            #outputs = model.vision_model(pixel_values = image, output_hidden_states=True)
-    #features = outputs.last_hidden_state
+            features = model.forward(image)
     return features
 
 class FTCLIP(nn.Module):
@@ -47,6 +70,7 @@ class FTCLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
         self.loss = nn.CrossEntropyLoss()
+
     def compute_loss(self, predicted, gold_label):
         return self.loss(predicted, gold_label)
 
@@ -56,7 +80,7 @@ class FTCLIP(nn.Module):
     def compute_similarity(self, texts_features, images_features):
         return texts_features @ images_features.t()
     
-    def forward(self, images, texts):
+    def forward(self, images):
       # Generate image features
       I_e=self.encode_image(images.to(self._device)).float()
 
@@ -81,14 +105,3 @@ class FTCLIP(nn.Module):
         if lr_scheduler is not None:
             save_dict["lr_scheduler_state_dict"] = lr_scheduler.state_dict()
         torch.save(save_dict, model_path)
-
-def preprocess_for_clip(pil_image):
-    # CLIP's image preprocessing
-    transform = Compose([
-        Resize(224, interpolation=Image.BICUBIC),
-        CenterCrop(224),
-        ToTensor(),
-        Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
-    ])
-
-    return transform(pil_image).unsqueeze(0)
