@@ -252,3 +252,6 @@ class SimilarityAnalysisManager:
         df = pd.DataFrame(summaries)
         df.to_csv(output_path)
         return summaries
+    
+    def save_sets_to_json(self, output_path):
+        pass

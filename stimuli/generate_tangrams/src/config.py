@@ -12,7 +12,9 @@ RAW_TANGRAMS_SVGS = DATA_DIR / "raw_tangrams" / "raw_svgs"
 PROCESSED_TANGRAMS_SVGS = DATA_DIR / "raw_tangrams" / "fixed_svgs"
 PROCESSED_PNGS = DATA_DIR / "processed_tangrams" / "processed_pngs"
 PROCESSED_TANGRAMS_WHITE = DATA_DIR / "processed_tangrams" / "compositional-white"
-PROCESSED_TANGRAMS_TRANS = DATA_DIR / "processed_tangrams" / "compositional-white"
+PROCESSED_TANGRAMS_TRANS = DATA_DIR / "processed_tangrams" / "compositional-trans"
+PROCESSED_TANGRAMS_FINAL = DATA_DIR / "processed_tangrams" / "compositional-final"
+
 MAPPING_FILE = DATA_DIR / "tangram_map.csv"
 EMBEDDINGS_DIR = DATA_DIR / "embeddings"
 
