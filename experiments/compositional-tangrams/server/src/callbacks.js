@@ -1,6 +1,8 @@
 import _ from "lodash";
 import { ClassicListenersCollector } from "@empirica/core/admin/classic";
 export const Empirica = new ClassicListenersCollector();
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
 const names = [
 "Repi",
@@ -23,8 +25,8 @@ const nameColors = [
   "#57AEC6", // Kayla
   "#5792C8" // Oliver
 ]
-import { promises as fs } from 'fs';
-import { join } from 'path';
+
+// Get the directory name of the current module
 
 Empirica.onGameStart(async ({ game }) => {
   // Set treatment variables for client-side access
@@ -35,12 +37,14 @@ Empirica.onGameStart(async ({ game }) => {
   game.set("maxTimeout", treatment.maxTimeout)
 
   let topTangrams, bottomTangrams, targetTangrams;
-    try {
-      const jsonTangramPath = game.get("contextStructure") == "noncomp"
-      ? join(process.cwd(), "src/noncomp_sets.json")
-      : join(process.cwd(), "src/comp_sets.json");
-
-      const jsonContent = await fs.readFile(jsonTangramPath, 'utf8');  // Add await here
+  try {
+    const jsonTangramPath = game.get("contextStructure") == "noncomp"
+      ? "noncomp_sets.json"  // Just the filename since it's in the same directory
+      : "comp_sets.json";
+    
+    console.log("Attempting to read from:", jsonTangramPath);
+    
+    const jsonContent = await fs.readFile(jsonTangramPath, 'utf8');
       const allSets = JSON.parse(jsonContent);
       const selectedSet = _.sample(allSets);
       

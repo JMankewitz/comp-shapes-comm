@@ -38,7 +38,7 @@ export function Consent({ next }) {
             <strong>Independant Contact:</strong> If you are not satisfied with how this study is being conducted, or if you have any concerns, com-plaints, or general questions about the research or your rights as a participant, please contact the Stanford Institutional Review Board (IRB) to speak to someone independent of the research team at 650-723-2480 or toll free at 1-866-680-2906, or email at irbnonmed@stanford.edu. You can also write to the Stanford IRB, Stanford University, 1705 El Camino Real, Palo Alto, CA 94306. Please save or print a copy of this page for your records. 
           </p><br/>
           <p>
-            <strong>If you agtee to participate in this research, please click "Next"</strong>
+            <strong>If you agree to participate in this research, please click "Next"</strong>
           </p><br/>
         </div>
         <Button handleClick={next} autoFocus>
