@@ -17,37 +17,28 @@ export function Consent({ next }) {
             participate in this experiment. 
           </p><br/>
           <p>
-            <strong>What you will do in this research:</strong> You will play a series of communication 
-            games with other participants: describing shapes on the screen back and forth with a partner.
+            <strong>Description:</strong> You are invited to participate in a research study about language and communication. The purpose of the research is to understand how you interact and communicate with other people in naturalistic set-tings as a fluent English speaker. This research will be conducted through the Prolific platform, in-cluding participants from the US, UK, and Canada. If you decide to participate in this research, you will play a communication game in a group with one or more partners. 
           </p> <br/>
           <p>
-            <strong>Time required:</strong> This study will take approximately thirty minutes.
+            <strong>Time Involvement:</strong> The task will last the amount of time advertised on Prolific. You are free to withdraw from the study at any time. 
           </p><br/>
           <p>
-            <strong>Purpose of the research:</strong> The purpose is to understand how language changes over time when used between groups of people.
+            <strong>Risks and Benefits:</strong> You may become frustrated if your partner gets distracted, or experience discomfort if other partici-pants in your group send text that is inappropriate for the task. We ask you to please be respectful of other participants you might be interacting with to mitigate these risks. You may also experience dis-comfort when being asked to discuss or challenge emotionally salient political beliefs. Study data will be stored securely, in compliance with Stanford University standards, minimizing the risk of confiden-tiality breach. This study advances our scientific understanding of how people communication and collaborate in naturalistic settings. This study may lead to further insights about what can go wrong in teamwork, suggest potential interventions to overcome these barriers, and help to develop assistive technologies that collaborate with human partners. We cannot and do not guarantee or promise that you will receive any benefits from this study. 
           </p><br/>
           <p>
-            <strong>Risks:</strong> There are no anticipated risks associated with participating in this study. The effects should be comparable to viewing a computer monitor and using a mouse for the duration of the experiment.
+            <strong>Compensation:</strong> You will receive payment in the amount advertised on Prolific. If you do not complete this study, you will receive prorated payment based on the time that you have spent. Additionally, you may be eligible for bonus payments as described in the instructions. 
           </p><br/>
           <p>
-            <strong>Compensation:</strong> You will receive $15/hr for completing the experiment and a performance bonus of up to $2.
+            <strong>Participant's Rights:</strong> If you have read this form and have decided to participate in this project, please understand your participation is voluntary and you have the right to withdraw your consent or discontinue participation at any time without penalty or loss of benefits to which you are otherwise entitled. The alternative is not to participate. You have the right to refuse to answer particular questions. The results of this research study may be presented at scientific or professional meetings or published in scientific journals. Your individual privacy will be maintained in all published and writ-ten data resulting from the study. In accordance with scientific norms, the data from this study may be used or shared with other researchers for future research (after removing personally identifying information) without additional consent from you. 
           </p><br/>
           <p>
-            <strong>Confidentiality:</strong> Your participation in this study will remain confidential. No personally identifiable information will be collected. Your anonymous data may be shared with other researchers and used in future projects.
+            <strong>Contact Information:</strong> If you have any questions, concerns or complaints about this research, its procedures, risks and benefits, contact the Protocol Director, Robert Hawkins (<a href="mailto:rdhawkins@stanford.edu">rdhawkins@stanford.edu</a>, 217-549-6923).
           </p><br/>
           <p>
-            <strong>Participation and withdrawal:</strong> Your participation in this study is completely voluntary and you may refuse to participate or choose to withdraw at any time without penalty or loss of benefits to which you are otherwise entitled.
+            <strong>Independant Contact:</strong> If you are not satisfied with how this study is being conducted, or if you have any concerns, com-plaints, or general questions about the research or your rights as a participant, please contact the Stanford Institutional Review Board (IRB) to speak to someone independent of the research team at 650-723-2480 or toll free at 1-866-680-2906, or email at irbnonmed@stanford.edu. You can also write to the Stanford IRB, Stanford University, 1705 El Camino Real, Palo Alto, CA 94306. Please save or print a copy of this page for your records. 
           </p><br/>
           <p>
-            <strong>How to contact the researcher:</strong> If you have questions or
-        concerns about your participation or payment, or want to request a
-        summary of research findings, please contact  <a href="mailto:mankewitz@wisc.edu">mankewitz@wisc.edu</a>.
-          </p><br/>
-          <p>
-            <strong>Who to contact about your rights in this research:</strong> For
-        questions, concerns, suggestions, or complaints that have not been or
-        cannot be addressed by the researcher, or to report research-related
-        harm, please contact the University of Wisconsin-Madison Human Research Protection Program at 608-890-4399 or <a href="mailto:compliance@research.wisc.edu">compliance@research.wisc.edu</a>.
+            <strong>If you agtee to participate in this research, please click "Next"</strong>
           </p><br/>
         </div>
         <Button handleClick={next} autoFocus>
