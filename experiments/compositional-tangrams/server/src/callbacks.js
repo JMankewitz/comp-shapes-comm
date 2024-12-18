@@ -2,8 +2,6 @@ import _ from "lodash";
 import { ClassicListenersCollector } from "@empirica/core/admin/classic";
 export const Empirica = new ClassicListenersCollector();
 
-
-
 const names = [
 "Repi",
 "Minu",
@@ -25,44 +23,54 @@ const nameColors = [
   "#57AEC6", // Kayla
   "#5792C8" // Oliver
 ]
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
-
-Empirica.onGameStart(({ game }) => {
+Empirica.onGameStart(async ({ game }) => {
   // Set treatment variables for client-side access
   const treatment = game.get("treatment");
   game.set("showNegativeFeedback", treatment.showNegativeFeedback);
   game.set("contextSize", treatment.contextSize);
   game.set("contextStructure", treatment.contextStructure)
   game.set("maxTimeout", treatment.maxTimeout)
-  let topTangrams = []
-  let bottomTangrams = []
 
-  const targetTangrams = []
-  if (game.get("contextStructure") == "noncomp") {
-    topTangrams = _.range(16);
-    bottomTangrams = _.range(start = 16, end = 32);
-    for (let i = 0; i < 16; i++){
-      targetTangrams.push([topTangrams[i], bottomTangrams[i]])
-    }
+  let topTangrams, bottomTangrams, targetTangrams;
+    try {
+      const jsonTangramPath = game.get("contextStructure") == "noncomp"
+      ? join(process.cwd(), "src/noncomp_sets.json")
+      : join(process.cwd(), "src/comp_sets.json");
 
-  } else {
-    topTangrams = _.range(4);
-    bottomTangrams = _.range(start = 16, end = 20);
-    
-    for (let i = 0; i < game.get("contextSize"); i++){
-      for (j = 0; j < game.get("contextSize"); j++){
-        targetTangrams.push([topTangrams[i], bottomTangrams[j]])
-      }
-    }
-  }
+      const jsonContent = await fs.readFile(jsonTangramPath, 'utf8');  // Add await here
+      const allSets = JSON.parse(jsonContent);
+      const selectedSet = _.sample(allSets);
+      
+      topTangrams = selectedSet.top_tangrams;
+      bottomTangrams = selectedSet.bottom_tangrams;
+     targetTangrams = [];
   
-  game.set("topTangrams", topTangrams)
-  game.set("bottomTangrams", bottomTangrams)
+      if (game.get("contextStructure") == "noncomp") {
+        for (let i = 0; i < topTangrams.length; i++){
+          targetTangrams.push([topTangrams[i], bottomTangrams[i]])
+        }
+      } else {
+        for (let i = 0; i < game.get("contextSize"); i++) {
+          for (let j = 0; j < game.get("contextSize"); j++) {  // Fixed j declaration
+            targetTangrams.push([topTangrams[i], bottomTangrams[j]])
+          }
+        }}
+        game.set("topTangrams", topTangrams)
+        game.set("bottomTangrams", bottomTangrams)
+        game.set('targets', targetTangrams)
+
+      // Rest of your code remains the same...
+    } catch (error) {
+      console.error("Error loading tangram sets:", error);
+      throw error;
+    }
 
   //console.log(topTangrams)
   //console.log(bottomTangrams)
   //console.log(targetTangrams)
-  game.set('targets', targetTangrams)
 
   // initialize players
   game.players.forEach((player, i) => {
