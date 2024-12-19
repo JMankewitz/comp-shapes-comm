@@ -36,14 +36,19 @@ Empirica.onGameStart(async ({ game }) => {
   game.set("contextStructure", treatment.contextStructure)
   game.set("maxTimeout", treatment.maxTimeout)
 
+  // rotations
+  const possibleRotations = [0, 90, 180, 270]
+
+const gameRotation = _.sample(possibleRotations)
+console.log("Game rotation set to:", gameRotation, "degrees for game", game.id);
+game.set("rotation", gameRotation);
+
   let topTangrams, bottomTangrams, targetTangrams;
   try {
     const jsonTangramPath = game.get("contextStructure") == "noncomp"
       ? "noncomp_sets.json"  // Just the filename since it's in the same directory
       : "comp_sets.json";
-    
-    console.log("Attempting to read from:", jsonTangramPath);
-    
+        
     const jsonContent = await fs.readFile(jsonTangramPath, 'utf8');
       const allSets = JSON.parse(jsonContent);
       const selectedSet = _.sample(allSets);
@@ -201,14 +206,15 @@ Empirica.onRoundEnded(({ round }) => {
     if(player.get("numRoundsInactive") > game.get("maxTimeout")) {
       console.log(player.id, " inactive")
       console.log(round.currentGame.id, " ending")
-      player.set("ended", "timeOut")};
+      player.set("ended", "timeOut"),
+      game.set("ended"),
+      game.set("status", "ended")};
   });
   console.log(round.get("trialNum"), "/", round.get("numTrials"), " for game ", round.currentGame.id)
   // Save outcomes as property of round for later export/analysis
   const player1 = players[0]
   round.set('response', player1.get('clicked'));
   round.set('correct', target == player1.get('clicked'));
-
 });
 
 Empirica.onGameEnded(({ game }) => {});

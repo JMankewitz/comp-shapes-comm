@@ -30,6 +30,8 @@ export function Tangram(props){
   const tangramurl = tangram
   const row = 1 + Math.floor(tangram_num / 2)
   const column = 1 + tangram_num % 2
+
+  const rotation = game.get("rotation") || 0
   const mystyle = {
     "background" : "url(" + tangramurl + ")",
     "backgroundSize": "90%",
@@ -42,7 +44,8 @@ export function Tangram(props){
     "marginLeft": "15px",
     "marginRight": "15px",
     "marginTop": "15px",
-    "marginBottom": "15px"
+    "marginBottom": "15px",
+    "transform": `rotate(${rotation}deg)`
   };
   
 if (tangram == target) {
