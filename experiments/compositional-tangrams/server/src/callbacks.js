@@ -191,30 +191,48 @@ Empirica.onRoundEnded(({ round }) => {
   const game = round.currentGame;
   const target = round.get('target');
 
+  let shouldEndGame = false;
+
   // Update player scores
   players.forEach(player => {
     const selectedAnswer = player.get("clicked");
     const currScore = player.get("bonus") || 0;
-    const correctAnswer = target
+    const correctAnswer = target;
     const scoreIncrement = selectedAnswer == correctAnswer ? .03 : 0;
-    const currNumInactive = player.get("numRoundsInactive") || 0;
+
     player.set("bonus", scoreIncrement + currScore);
     player.set("score", scoreIncrement + currScore);
+
     if (player.get("clicked") == '') {
-      player.set("numRoundsInactive", currNumInactive + 1)
+      const currNumInactive = player.get("numRoundsInactive") || 0;
+      const newInactiveCount = currNumInactive + 1;
+      player.set("numRoundsInactive", newInactiveCount);
+      console.log(`Player ${player.id} inactive count: ${newInactiveCount}/${game.get("maxTimeout")} in game ${game.id}`);
+      if(newInactiveCount > game.get("maxTimeout")) {
+        if(!game.get("ended")) {
+          console.log(`Marking player ${player.id} as ended due to timeout`);
+          player.set("ended", "timeOut");
+          shouldEndGame = true;
+        }
+      };
     }
-    if(player.get("numRoundsInactive") > game.get("maxTimeout")) {
-      console.log(player.id, " inactive")
-      console.log(round.currentGame.id, " ending")
-      player.set("ended", "timeOut"),
-      game.set("ended"),
-      game.set("status", "ended")};
+    else {
+      player.set("numRoundsInactive", 0);
+      console.log(`Reset inactivity counter for player ${player.id} - they responded`);
+    }
   });
-  console.log(round.get("trialNum"), "/", round.get("numTrials"), " for game ", round.currentGame.id)
+
+  if (shouldEndGame && !game.get("ended")) {
+    console.log(`Ending game ${game.id} due to timeout`);
+    game.set("ended", "timeOut");
+    game.set("status", "ended");
+  }
+
   // Save outcomes as property of round for later export/analysis
   const player1 = players[0]
   round.set('response', player1.get('clicked'));
   round.set('correct', target == player1.get('clicked'));
+  console.log(round.get("trialNum"), "/", round.get("numTrials"), " for game ", round.currentGame.id)
 });
 
 Empirica.onGameEnded(({ game }) => {});

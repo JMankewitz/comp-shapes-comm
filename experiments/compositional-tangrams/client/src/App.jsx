@@ -5,6 +5,7 @@ import React from "react";
 import { Game } from "./Game";
 import { ExitSurvey } from "./intro-exit/ExitSurvey";
 import { IncompleteExitSurvey } from "./intro-exit/IncompleteExitSurvey";
+import { NoGameSurvey } from "./intro-exit/NoGameExitSurvey";
 
 import { Introduction } from "./intro-exit/Introduction";
 import {Consent} from "./intro-exit/Consent"
@@ -18,12 +19,17 @@ export default function App() {
   const url = `${protocol}//${host}/query`;
 
   function introSteps({ game, player }) {
-    return [Consent, Introduction, Quiz];
+    //return [Consent, Introduction, Quiz];
+    return [Consent];
   }
 
   function exitSteps({ game, player }) {
+    console.log("Player ended status:", player.get('ended'));
     if (player.get('ended') === "timeOut") {
       return [IncompleteExitSurvey];
+    }
+    else if (player.get('ended') === "failed" || player.get('ended') === "terminated") {
+      return [NoGameSurvey];
     }
     else {
       return [ExitSurvey];
