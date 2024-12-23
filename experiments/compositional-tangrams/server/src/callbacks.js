@@ -211,21 +211,25 @@ Empirica.onRoundEnded(({ round }) => {
       if(newInactiveCount > game.get("maxTimeout")) {
         if(!game.get("ended")) {
           console.log(`Marking player ${player.id} as ended due to timeout`);
-          player.set("ended", "timeOut");
+          player.exit("timeOut")
+          //player.set("ended", "timeOut");
           shouldEndGame = true;
         }
       };
     }
     else {
-      player.set("numRoundsInactive", 0);
-      console.log(`Reset inactivity counter for player ${player.id} - they responded`);
+      if (player.get("numRoundsInactive") > 0)
+        {player.set("numRoundsInactive", 0);
+          console.log(`Reset inactivity counter for player ${player.id} - they responded`);}
+
     }
   });
 
   if (shouldEndGame && !game.get("ended")) {
     console.log(`Ending game ${game.id} due to timeout`);
-    game.set("ended", "timeOut");
-    game.set("status", "ended");
+    game.end("terminated", "timeOut")
+    //game.set("ended", "timeOut");
+    //game.set("status", "ended");
   }
 
   // Save outcomes as property of round for later export/analysis

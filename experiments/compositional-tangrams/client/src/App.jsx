@@ -28,7 +28,7 @@ export default function App() {
     if (player.get('ended') === "timeOut") {
       return [IncompleteExitSurvey];
     }
-    else if (player.get('ended') === "failed" || player.get('ended') === "terminated") {
+    else if (player.get('ended') === "game failed" || player.get('ended') === "terminated") {
       return [NoGameSurvey];
     }
     else {
