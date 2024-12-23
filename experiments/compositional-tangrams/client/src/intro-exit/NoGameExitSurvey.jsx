@@ -17,12 +17,13 @@ export function NoGameSurvey({ next }) {
     <div className="py-8 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
       <Alert title="No Game Available">
         <p>
-          Unfortunately, we were unable to match you with other participants for a game. You will still be compensated for your time spent in the waiting lobby.
+          Unfortunately, we were unable to match you with other participants for a game or experienced an error. You will still be compensated for your time spent in the waiting lobby.
+          
         </p>
       </Alert>
       <Alert title="Payment">
         <p>
-          Please submit the following code to receive your payment:{" "}
+        If you would like to re-enter the queue, please contact the researcher on Prolific. Otherwise, please submit the following code to receive a partial payment:{" "}
           <strong>CN43IL3A</strong>
         </p>
         <p className="pt-1">

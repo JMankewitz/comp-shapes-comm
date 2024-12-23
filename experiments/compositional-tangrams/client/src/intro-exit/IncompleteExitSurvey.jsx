@@ -37,7 +37,7 @@ export function IncompleteExitSurvey({ next }) {
     <div className="py-8 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
       <Alert title="Disconnected">
         <p>
-          It seems you and/or your partner were disconnected. You will still be compensated for your time and effort.
+          The game has ended or you and/or your partner disconnected. Thanks for playing!
         </p>
 
       </Alert>

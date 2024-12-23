@@ -92,7 +92,8 @@ game.set("rotation", gameRotation);
     player.set("partner", otherPlayer[0].id)
     player.set("role", i == 0 ? 'director' : 'matcher'); //first player is always speaker (if overfill there may be multiple listeners??)
     player.set("bonus", 0);
-    player.set("score", 0)
+    player.set("score", 0);
+    player.set("numRoundsInactive", 0);
   });
 
   const targets = game.get('targets')
@@ -212,22 +213,21 @@ Empirica.onRoundEnded(({ round }) => {
         if(!game.get("ended")) {
           console.log(`Marking player ${player.id} as ended due to timeout`);
           player.exit("timeOut")
-          //player.set("ended", "timeOut");
           shouldEndGame = true;
         }
       };
     }
     else {
-      if (player.get("numRoundsInactive") > 0)
-        {player.set("numRoundsInactive", 0);
-          console.log(`Reset inactivity counter for player ${player.id} - they responded`);}
+      if (player.get("numRoundsInactive") > 0) {
+        player.set("numRoundsInactive", 0);
+        console.log(`Reset inactivity counter for player ${player.id} - they responded`);}
 
     }
   });
 
   if (shouldEndGame && !game.get("ended")) {
     console.log(`Ending game ${game.id} due to timeout`);
-    game.end("terminated", "timeOut")
+    game.end("ended", "timeOut")
     //game.set("ended", "timeOut");
     //game.set("status", "ended");
   }
