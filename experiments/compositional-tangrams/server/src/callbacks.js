@@ -94,6 +94,7 @@ game.set("rotation", gameRotation);
     player.set("bonus", 0);
     player.set("score", 0);
     player.set("numRoundsInactive", 0);
+    player.set("endedInactive", false);
   });
 
   const targets = game.get('targets')
@@ -212,6 +213,7 @@ Empirica.onRoundEnded(({ round }) => {
       if(newInactiveCount > game.get("maxTimeout")) {
         if(!game.get("ended")) {
           console.log(`Marking player ${player.id} as ended due to timeout`);
+          player.set("endedInactive", true);
           player.exit("timeOut")
           shouldEndGame = true;
         }

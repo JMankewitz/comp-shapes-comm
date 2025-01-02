@@ -26,7 +26,7 @@ export default function App() {
   function exitSteps({ game, player }) {
     console.log("Player ended status:", player.get('ended'));
     //console.log("game ended reason:", game.get("endedReason"))
-    if (player.get('ended') === "game ended" ||player.get('ended') === "timeOut" ){
+    if (player.get('ended') === "game ended" || player.get('endedInactive')){
       return [IncompleteExitSurvey];
     }
     else {
