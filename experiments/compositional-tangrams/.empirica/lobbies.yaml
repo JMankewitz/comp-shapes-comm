@@ -7,14 +7,15 @@ lobbies:
       kind: shared
       duration: 5m0s
       strategy: ignore
-    - name: Default individual
+    - name: Longer individual
       kind: individual
-      duration: 5m0s
+      duration: 15m0s
+      strategy: ignore
     - name: Quick individual
       kind: individual
       duration: 1m0s
       strategy: ignore
-    - name: 'Quick shared fail '
+    - name: Quick shared fail
       kind: individual
       duration: 1m0s
       strategy: fail

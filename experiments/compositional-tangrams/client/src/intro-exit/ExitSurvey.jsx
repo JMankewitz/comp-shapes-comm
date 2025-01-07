@@ -38,7 +38,7 @@ export function ExitSurvey({ next }) {
       <Alert title="Bonus">
         <p>
           Please submit the following code to receive your bonus:{" "}
-          <strong>C1DOSPNG</strong>.
+          <strong>C1DOSPNG</strong>
         </p>
         <p className="pt-1">
           Your final <strong>bonus</strong> is in addition of the{" "}
