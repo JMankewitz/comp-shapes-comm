@@ -7,13 +7,13 @@ lobbies:
       kind: shared
       duration: 5m0s
       strategy: ignore
-    - name: Longer individual
+    - name: Longer individual Kick
       kind: individual
       duration: 15m0s
       strategy: ignore
-    - name: Quick individual
+    - name: 10m individual Kick
       kind: individual
-      duration: 1m0s
+      duration: 10m0s
       strategy: ignore
     - name: Quick shared fail
       kind: individual
