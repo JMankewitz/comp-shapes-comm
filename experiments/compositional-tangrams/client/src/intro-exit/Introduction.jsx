@@ -85,10 +85,7 @@ export function Introduction({ next }) {
   as responsive as possible.
 </p>
 <br></br>
-<p> Finally, please DO NOT refresh the page at any point once you
-start the game (including the waiting page). If you refresh, you will
-not be able to rejoin the game you were in and you and your partner
-may not be able to submit the game. Thank you!
+<p> Finally, please refresh the page if your game fails to load or you lose connection. The game will attempt to reconnect you with your partner once you are connected. If you or your partner disconnect, you will be paid for you time. 
 </p>
 <br></br>
 <p> Next, there will be a short quiz to test your understanding of the rules of the game. Once you pass the quiz, you will be allowed to match with another player!
