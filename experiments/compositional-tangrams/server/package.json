@@ -3,7 +3,8 @@
     "@empirica/core": "1.12.1",
     "@sentry/react": "^8.48.0",
     "lodash": "^4.17.21",
-    "minimist": "1.2.6"
+    "minimist": "1.2.6",
+    "n": "^10.1.0"
   },
   "devDependencies": {
     "esbuild": "0.14.47"

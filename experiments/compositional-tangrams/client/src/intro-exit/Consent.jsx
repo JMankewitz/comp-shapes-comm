@@ -1,6 +1,7 @@
 import React from "react";
 import { Button } from "../components/Button";
 
+
 export function Consent({ next }) {
   return (
     <div className="flex items-center justify-center w-screen">
