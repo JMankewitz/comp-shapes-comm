@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@empirica/core": "1.12.1",
+    "@sentry/react": "^8.48.0",
     "esbuild": "0.17.15",
     "lodash": "^4.17.21",
     "react": "18.2.0",
