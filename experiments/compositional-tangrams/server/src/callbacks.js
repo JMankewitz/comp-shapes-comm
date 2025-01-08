@@ -181,6 +181,7 @@ Empirica.onRoundStart(({ round }) => {
     player.set('clicked', '');
     // swap player roles
     player.set("role", player.get('role') == 'director' ? 'matcher' : 'director');
+    round.set(player.get('role'), player.id);
   });
 });
 
