@@ -7,9 +7,6 @@ export function Introduction({ next }) {
       <h3 className="text-lg leading-6 font-medium text-gray-1000">
         Task Instructions
       </h3>
-      <h1 onClick="throw new Error('Test')">
-  My Website
-</h1>
       <h2>Matching Game  </h2>
       <div className="mt-3 mb-6" width="800px">
         <p className="text-md text-gray-900">
