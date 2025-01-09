@@ -9,6 +9,7 @@ import { NoGameSurvey } from "./intro-exit/NoGameExitSurvey";
 
 import { Introduction } from "./intro-exit/Introduction";
 import {Consent} from "./intro-exit/Consent"
+import { MyPlayerForm } from "./intro-exit/PlayerCreate.jsx";
 
 import {Quiz} from "./intro-exit/Quiz";
 export default function App() {
@@ -38,7 +39,7 @@ export default function App() {
       <div className="h-screen relative">
         <EmpiricaMenu position="bottom-left" />
         <div className="h-full overflow-auto">
-          <EmpiricaContext introSteps={introSteps} 
+          <EmpiricaContext playerCreate={MyPlayerForm} introSteps={introSteps} 
           exitSteps={exitSteps}>
             <Game />
           </EmpiricaContext>
