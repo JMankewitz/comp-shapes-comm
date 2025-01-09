@@ -6,10 +6,26 @@ import "../node_modules/@empirica/core/dist/player.css";
 import App from "./App";
 import "./index.css";
 
+import * as Sentry from "@sentry/react";
+
+Sentry.init({
+    replaysOnErrorSampleRate: 1.0,
+    dsn: "https://39dffa4a7bdcafb5290401881940b4fa@o4506525893853184.ingest.us.sentry.io/4508609472954368",
+    integrations: [
+	Sentry.browserTracingIntegration(),
+        Sentry.replayIntegration({
+	    maskAllText: true,
+	    blockAllMedia: true,
+	}),
+    ],
+    release: "comp-shapes-comm@0.0.1",
+});
+
+
 const container = document.getElementById("root");
 const root = createRoot(container); // createRoot(container!) if you use TypeScript
 root.render(
   <React.StrictMode>
-    <App />
+      <App />
   </React.StrictMode>
 );
