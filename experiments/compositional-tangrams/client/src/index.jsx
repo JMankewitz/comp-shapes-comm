@@ -18,7 +18,7 @@ Sentry.init({
 	    blockAllMedia: true,
 	}),
     ],
-    release: "comp-shapes-comm@0.0.1",
+    release: "comp-shapes-comm@0.0.2",
 });
 
 
