@@ -20,7 +20,6 @@ export default function App() {
 
   function introSteps({ game, player }) {
     return [Consent, Introduction, Quiz];
-    //return [Consent];
   }
 
   function exitSteps({ game, player }) {
