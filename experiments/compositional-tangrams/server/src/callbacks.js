@@ -76,11 +76,6 @@ game.set("rotation", gameRotation);
       console.error("Error loading tangram sets:", error);
       throw error;
     }
-
-  //console.log(topTangrams)
-  //console.log(bottomTangrams)
-  //console.log(targetTangrams)
-
   // initialize players
   game.players.forEach((player, i) => {
     const otherPlayer = game.players.filter((p) => p.id != player.id);

@@ -16,6 +16,16 @@ export function Tangram(props) {
   } = props;
 
   const handleClick = () => {
+    if (stage.get("name") !== "selection") {
+      console.warn("Attempt to click outside selection stage");
+      return;
+    }
+
+    if (player.get("clicked") !== ''){
+      console.warn("Player already made selection", {clicked: player.get("clicked")});
+      return; //prevent multiple clicks
+    }
+
     const partnerID = player.get("partner");
     const partner = players.find((p) => p.id === partnerID);
     const speakerMsgs = _.filter(round.get("chat"), (msg) => {
