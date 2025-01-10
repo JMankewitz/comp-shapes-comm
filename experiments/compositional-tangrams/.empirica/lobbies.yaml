@@ -15,7 +15,7 @@ lobbies:
       kind: individual
       duration: 10m0s
       strategy: ignore
-    - name: Quick shared fail
+    - name: 3m individual kick
       kind: individual
-      duration: 1m0s
-      strategy: fail
+      duration: 3m0s
+      strategy: ignore

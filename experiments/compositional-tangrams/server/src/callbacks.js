@@ -170,6 +170,7 @@ Empirica.onRoundStart(({ round }) => {
 
   const players = round.currentGame.players;
   round.set('selection', '')
+  round.set("justStarted", true);
 
   const chat = round.get("chat") ?? [];
 

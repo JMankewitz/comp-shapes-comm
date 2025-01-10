@@ -1,23 +1,39 @@
 import {Chat, useGame, useRound, usePlayer} from "@empirica/core/player/classic/react";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Profile } from "./Profile";
 import { Task } from "./Task";
 
-// const roundSound = new Audio("experiment/round-sound.mp3");
-// const gameSound = new Audio("experiment/bell.mp3");
+const roundSound = new Audio("round-sound.mp3");
+const gameSound = new Audio("bell.mp3");
 
 export function Game() {
   const game = useGame();
   const round = useRound();
   const player = usePlayer();
-  // Make some noise
-  // if (game.get("justStarted")) {
-  //   gameSound.play();
-  //   game.set("justStarted", false);
-  // } else {
-  //   roundSound.play();
-  // }
+
+  useEffect(() => {
+    if (game.get("justStarted")) {
+      gameSound.play().catch(e => console.warn("Error playing game sound:", e));
+      game.set("justStarted", false);
+    }
+  }, [game.get("justStarted")]);
+
+  useEffect(() => {
+    if (round?.get("justStarted")) {
+      roundSound.play().catch(e => console.warn("Error playing round sound:", e));
+      round.set("justStarted", false);
+    }
+  }, [round?.get("justStarted")]);
+
+  //if (game.get("justStarted")) {
+  //  gameSound.play().catch(e => console.warn("Error playing game sound:", e));
+  //  game.set("justStarted", false);
+ // } else {
+  //  if (round.get("justStarted")) {
+  //  roundSound.play().catch(e => console.warn("Error playing round sound:", e));
+  //  round.set("justStarted", false);}
+ // }
 
   return (
     <div className="h-full w-full flex">
