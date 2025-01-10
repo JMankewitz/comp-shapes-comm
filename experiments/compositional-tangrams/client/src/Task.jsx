@@ -8,7 +8,7 @@ import {
 import _ from "lodash";
 
 import { Loading } from "@empirica/core/player/react";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Tangram } from "./components/Tangram.jsx";
 
 export function Task() {
@@ -19,32 +19,42 @@ export function Task() {
   const stage = useStage();
   
   
-  const target = round.get("target") // list of top and bottom shapes
-  let tangramURLs = round.get("tangramURLs");
-  //console.log(player.get("role"))
-  let final_tangram_urls = tangramURLs
-  if (player.get("role") == 'director'){
-    // reverse order of tangrams
-    final_tangram_urls = tangramURLs.toReversed()
-  } 
+  const target = round.get("target"); // list of top and bottom shapes
+  let tangramURLs = round.get("tangramURLs") || [];
+  const [preloadedImages, setPreloadedImages] = useState({});
 
-  const correct = player.get('clicked') == target;
-  let tangramsToRender;
-  if (final_tangram_urls) {
-    tangramsToRender = final_tangram_urls.map((tangram, i) => (
-      <Tangram
-        key={tangram}
-        tangram={tangram}
-        tangram_num={i}
-        round={round}
-        stage={stage}
-        game={game}
-        player={player}
-        players={players}
-        target={target}
-      />
-    ));
+  useEffect(() => {
+    const images = {};
+    tangramURLs.forEach((url) => {
+      const img = new Image();
+      img.src = url;
+      images[url] = img;
+    });
+    setPreloadedImages(images);
+  }, [tangramURLs]);
+
+  //console.log(player.get("role"))
+  let finalTangramURLs = tangramURLs;
+  if (player.get("role") === 'director'){
+    // reverse order of tangrams
+    finalTangramURLs = tangramURLs.slice().reverse();
   }
+const correct = player.get("clicked") === target;
+
+const tangramsToRender = finalTangramURLs.map((tangram, i) => (
+  <Tangram
+    key={tangram}
+    tangram={tangram}
+    tangram_num={i}
+    round={round}
+    stage={stage}
+    game={game}
+    player={player}
+    players={players}
+    target={target}
+    preloadedImage={preloadedImages[tangram]?.src}
+  />
+));
 
 let feedback = '';
 

@@ -243,4 +243,3 @@ Empirica.onRoundEnded(({ round }) => {
 });
 
 Empirica.onGameEnded(({ game }) => {});
-

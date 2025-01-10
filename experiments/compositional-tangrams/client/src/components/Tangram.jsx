@@ -1,126 +1,97 @@
-import { useStageTimer } from "@empirica/core/player/classic/react";
 import React from "react";
 import _ from "lodash";
-import { useGame, useStage } from "@empirica/core/player/classic/react";
 
-export function Tangram(props){
-  const handleClick = e => {
-    //console.log('click2')
-    const { tangram, tangram_num, stage, player, players, round } = props;
-    const partnerID = player.get('partner');
-    const partner = players.filter((p) => p.id == partnerID)[0];
-    const speakerMsgs = _.filter(round.get("chat"), msg => {
-      return msg.sender.id == player.get('partner') && partner.get("role") == 'director'
-    })
+export function Tangram(props) {
+  const {
+    tangram,
+    tangram_num,
+    round,
+    stage,
+    game,
+    player,
+    players,
+    target,
+    preloadedImage,
+    ...rest
+  } = props;
 
-    // only register click for listener and only after the speaker has sent a message
-    if (stage.get("name") == 'selection' &
-        speakerMsgs.length > 0 &
-        player.get('clicked') == '' &
-        player.get('role') == 'matcher') {
-      player.set("clicked", tangram)
-      partner.set("clicked", tangram)
-      player.stage.set("submit", true)
-      partner.stage.set("submit", true)
+  const handleClick = () => {
+    const partnerID = player.get("partner");
+    const partner = players.find((p) => p.id === partnerID);
+    const speakerMsgs = _.filter(round.get("chat"), (msg) => {
+      return (
+        msg.sender.id === player.get("partner") &&
+        partner.get("role") === "director"
+      );
+    });
+
+    if (
+      stage.get("name") === "selection" &&
+      speakerMsgs.length > 0 &&
+      player.get("clicked") === "" &&
+      player.get("role") === "matcher"
+    ) {
+      player.set("clicked", tangram);
+      partner.set("clicked", tangram);
+      player.stage.set("submit", true);
+      partner.stage.set("submit", true);
     }
   };
-  
-  const { tangram, round, tangram_num, stage, player, game, target, ...rest } = props;
 
-  const tangramurl = tangram
-  const row = 1 + Math.floor(tangram_num / 2)
-  const column = 1 + tangram_num % 2
+  const row = 1 + Math.floor(tangram_num / 2);
+  const column = 1 + (tangram_num % 2);
+  const rotation = game.get("rotation") || 0;
 
-  const rotation = game.get("rotation") || 0
-  const mystyle = {
-    "background" : "url(" + tangramurl + ")",
-    "backgroundSize": "90%",
-    "backgroundRepeat": "no-repeat",
-    "backgroundPosition": "center",
-    "width" : "25vh",
-    "height" : "25vh",
-    "gridRow": row,
-    "gridColumn": column,
-    "marginLeft": "15px",
-    "marginRight": "15px",
-    "marginTop": "15px",
-    "marginBottom": "15px",
-    "transform": `rotate(${rotation}deg)`
-  };
-  
-if (tangram == target) {
-  // selection stage highlight for speaker only
-  if (stage.get("name") == "selection"){
-    // if speaker and hasnt clicked yet...
-    if(player.get('role') == 'director' &&
-       (player.get('clicked') == '')) {
-      
-      _.extend(mystyle, {
-        "outline" : "10px solid #000",
-        "zIndex" : "9"
-      }) 
+  const isCorrect = player.get("clicked") === target;
+
+  // Determine the box color
+  const borderColor = (() => {
+    if (stage.get("name") === "selection") {
+      if (
+        player.get("role") === "director" &&
+        player.get("clicked") === "" &&
+        tangram === target
+      ) {
+        return "#000"; // Black for target selection highlight
+      }
+    } else if (stage.get("name") === "feedback") {
+      if (tangram === target) {
+        return isCorrect ? "green" : "red"; // Green if correct, red if incorrect
+      }
     }
-  }
-  if (stage.get("name") == "feedback") {
-    if (player.get("clicked") == tangram) {
-      _.extend(mystyle, {
-        "outline" : "10px solid green",
-        "zIndex" : "9"
-      })
-    } else {
-      if (player.get("clicked") !== '') {
+    return "transparent"; // Default border color
+  })();
 
-      _.extend(mystyle, {
-        "outline" : "10px solid red",
-        "zIndex" : "9"
-      })}
-    }
-  }
-}
-
-  // Highlight target object for speaker at selection stage
-  // Show it to both players at feedback stage if 'showNegativeFeedback' enabled.
-/*   if(tangram == target) {
-    //console.log(player.get('clicked'));
-    if(player.get('role') == 'director' &&
-       (player.get('clicked') == '')) {
-      
-      _.extend(mystyle, {
-        "outline" : "10px solid #000",
-        "zIndex" : "9"
-      })
-    }
-    if(player.get('role') == 'director' &&
-       !game.get('showNegativeFeedback') &&
-       player.get('clicked') != '') {
-      _.extend(mystyle, {
-        "outline" : "10px solid red",
-        "zIndex" : "9"
-      })
-    }
-  }
-  
-
-  // Highlight clicked object in green if correct;
-  // If 'showNegativeFeedback' enabled, also show red if incorrect
-  if(tangram == player.get('clicked')) {
-    
-    const color = (
-      tangram == target ? '10px solid green' : (
-        player.get('role') == 'matcher' || game.get('showNegativeFeedback')
-      ) ? '10px solid red' : 'none'
-    );
-    _.extend(mystyle, {
-      "outline" :  color,
-      "zIndex" : "9"
-    })
-  } */
 
   return (
     <div
       onClick={handleClick}
-      style={mystyle}
+      style={{
+        width: "25vh",
+        height: "25vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gridRow: row,
+        gridColumn: column,
+        margin: "15px",
+        border: "10px solid",
+        borderColor: borderColor,
+        boxSizing: "border-box",
+        position: "relative",
+        backgroundColor: "#fff",
+      }}
     >
+      <img
+        src={tangram}
+        alt={`Tangram shape: ${tangram}`}
+        style={{
+          maxWidth: "80%",
+          maxHeight: "80%",
+          transform: `rotate(${rotation}deg)`,
+          display: "block",
+        }}
+      />
     </div>
   );
 }
