@@ -35,7 +35,8 @@ Empirica.onGameStart(async ({ game }) => {
   game.set("contextSize", treatment.contextSize);
   game.set("contextStructure", treatment.contextStructure)
   game.set("maxTimeout", treatment.maxTimeout)
-
+  game.set("numRoundsInactive", 0);
+  game.set("endedInactive", false);
   // rotations
   const possibleRotations = [0, 90, 180, 270]
 
@@ -88,8 +89,6 @@ game.set("rotation", gameRotation);
     player.set("role", i == 0 ? 'director' : 'matcher'); //first player is always speaker (if overfill there may be multiple listeners??)
     player.set("bonus", 0);
     player.set("score", 0);
-    player.set("numRoundsInactive", 0);
-    player.set("endedInactive", false);
   });
 
   const targets = game.get('targets')
@@ -170,17 +169,20 @@ game.set("rotation", gameRotation);
 Empirica.onRoundStart(({ round }) => {
 
   const players = round.currentGame.players;
+  round.set('selection', '')
 
   const chat = round.get("chat") ?? [];
+
   players.forEach((player, i) => {
-    player.set('clicked', '');
+    //player.set('clicked', '');
     // swap player roles
     player.set("role", player.get('role') == 'director' ? 'matcher' : 'director');
     round.set(player.get('role'), player.id);
   });
 });
 
-Empirica.onStageStart(({ stage }) => {});
+Empirica.onStageStart(({ stage }) => {
+});
 
 Empirica.onStageEnded(({ stage }) => {});
 
@@ -188,53 +190,46 @@ Empirica.onRoundEnded(({ round }) => {
   const players = round.currentGame.players;
   const game = round.currentGame;
   const target = round.get('target');
-
-  let shouldEndGame = false;
+  const selectedAnswer = round.get('selection')
 
   // Update player scores
   players.forEach(player => {
-    const selectedAnswer = player.get("clicked");
     const currScore = player.get("bonus") || 0;
-    const correctAnswer = target;
-    const scoreIncrement = selectedAnswer == correctAnswer ? .03 : 0;
-
+    const scoreIncrement = selectedAnswer === target ? .03 : 0;
     player.set("bonus", scoreIncrement + currScore);
     player.set("score", scoreIncrement + currScore);
+  })
+  const currentSelection = round.get('selection');
+  const currentInactive = game.get("numRoundsInactive");
 
-    if (player.get("clicked") == '') {
-      const currNumInactive = player.get("numRoundsInactive") || 0;
-      const newInactiveCount = currNumInactive + 1;
-      player.set("numRoundsInactive", newInactiveCount);
-      console.log(`Player ${player.id} inactive count: ${newInactiveCount}/${game.get("maxTimeout")} in game ${game.id}`);
-      if(newInactiveCount > game.get("maxTimeout")) {
-        if(!game.get("ended")) {
-          console.log(`Marking player ${player.id} as ended due to timeout`);
-          player.set("endedInactive", true);
-          player.exit("timeOut")
-          shouldEndGame = true;
-        }
-      };
+  console.log(`Game ${game.id} - ${round.get("trialNum")}/${round.get("numTrials")}`);
+  console.log(`- target: "${target}", selection: "${currentSelection}", inactive count: ${game.get("numRoundsInactive")}`);
+  
+  if (currentSelection === '') {
+    // No selection - increment inactivity counter
+    const currNumInactive = game.get("numRoundsInactive");
+    const newInactiveCount = currNumInactive + 1;
+    game.set("numRoundsInactive", newInactiveCount);
+  
+    // Check if exceeded timeout
+    if (newInactiveCount >= game.get("maxTimeout")) {
+      if (!game.get("ended")) {
+        console.log(`Marking Game ${game.id} as ended due to timeout`);
+        game.set("endedInactive", true);
+        game.end("ended", "timeOut");
+      }
     }
-    else {
-      if (player.get("numRoundsInactive") > 0) {
-        player.set("numRoundsInactive", 0);
-        console.log(`Reset inactivity counter for player ${player.id} - they responded`);}
-
-    }
-  });
-
-  if (shouldEndGame && !game.get("ended")) {
-    console.log(`Ending game ${game.id} due to timeout`);
-    game.end("ended", "timeOut")
-    //game.set("ended", "timeOut");
-    //game.set("status", "ended");
+  } else {
+    // Only log if we're resetting from an inactive state
+    if (currentInactive > 0) {
+      console.log(`Reset inactivity counter for game ${game.id} - they responded after ${currentInactive} inactive rounds`);
+    } 
+    game.set("numRoundsInactive", 0);
   }
 
   // Save outcomes as property of round for later export/analysis
-  const player1 = players[0]
-  round.set('response', player1.get('clicked'));
-  round.set('correct', target == player1.get('clicked'));
-  console.log(round.get("trialNum"), "/", round.get("numTrials"), " for game ", round.currentGame.id)
+  round.set('response', round.get('selection'));
+  round.set('correct', target === round.get('selection'));
 });
 
 Empirica.onGameEnded(({ game }) => {});

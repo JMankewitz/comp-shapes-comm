@@ -8,7 +8,7 @@ import {
 import _ from "lodash";
 
 import { Loading } from "@empirica/core/player/react";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Tangram } from "./components/Tangram.jsx";
 
 export function Task() {
@@ -17,7 +17,6 @@ export function Task() {
   const players = usePlayers();
   const round = useRound();
   const stage = useStage();
-  
   
   const target = round.get("target"); // list of top and bottom shapes
   let tangramURLs = round.get("tangramURLs") || [];
@@ -39,7 +38,8 @@ export function Task() {
     // reverse order of tangrams
     finalTangramURLs = tangramURLs.slice().reverse();
   }
-const correct = player.get("clicked") === target;
+
+const correct = round.get("selection") === target;
 
 const tangramsToRender = finalTangramURLs.map((tangram, i) => (
   <Tangram
@@ -59,7 +59,7 @@ const tangramsToRender = finalTangramURLs.map((tangram, i) => (
 let feedback = '';
 
 if (stage.get('name') == 'feedback') {
-  if (player.get('clicked') == '') {
+  if (round.get('selection') == '') {
     if (player.get('role') == 'director') {
       feedback = "Oops! Your partner did not respond in time."
     } else {
@@ -77,13 +77,9 @@ if (stage.get('name') == 'feedback') {
   feedback = '';
 };
 
-// feedback = (
-//     player.get('clicked') == '' ? '' :
-//       correct ? "Correct! You earned $0.03 cents!" :
-//       "Ooops, that wasn't the target! You earned no bonus this round."
-//   )
 
   return (
+
     <div className="task">
       <div className="board">
         <div className="header" style={{display:'flex', flexDirection: 'column', alignItems: 'center'}}>

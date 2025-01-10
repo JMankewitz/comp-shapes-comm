@@ -21,8 +21,9 @@ export function Tangram(props) {
       return;
     }
 
-    if (player.get("clicked") !== ''){
-      console.warn("Player already made selection", {clicked: player.get("clicked")});
+    if (round.get("selection") !== '' && round.get("selection") !==tangram){
+      console.warn("Player already made selection", {attempted_selection: tangram, 
+        selected: round.get("selection")});
       return; //prevent multiple clicks
     }
 
@@ -38,11 +39,10 @@ export function Tangram(props) {
     if (
       stage.get("name") === "selection" &&
       speakerMsgs.length > 0 &&
-      player.get("clicked") === "" &&
+      (round.get("selection") === "" || round.get("selection") === tangram) &&
       player.get("role") === "matcher"
     ) {
-      player.set("clicked", tangram);
-      partner.set("clicked", tangram);
+      round.set("selection", tangram);
       player.stage.set("submit", true);
       partner.stage.set("submit", true);
     }
@@ -52,14 +52,14 @@ export function Tangram(props) {
   const column = 1 + (tangram_num % 2);
   const rotation = game.get("rotation") || 0;
 
-  const isCorrect = player.get("clicked") === target;
+  const isCorrect = round.get("selection") === target;
 
   // Determine the box color
   const borderColor = (() => {
     if (stage.get("name") === "selection") {
       if (
         player.get("role") === "director" &&
-        player.get("clicked") === "" &&
+        round.get("selection") === "" &&
         tangram === target
       ) {
         return "#000"; // Black for target selection highlight
