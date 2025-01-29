@@ -1,0 +1,714 @@
+
+# Comp Shapes CogSci2025
+
+Data processing, analysis, and figures for the 2025 CogSci Submission titled "[Title]"
+
+## Setup
+
+```{r}
+library(tidyverse)
+library(lmerTest)
+library(here)
+library(broom.mixed)
+library(tidyboot)
+
+color_map <- list('Within Trial' = "#85216BFF",'No Competitor' = "#FCAD12FF", 'Across Trial' = "#CB4149FF")
+
+fig_write_path <- here("analysis/figures")
+
+game_blacklist <- c("01JGZ1J4WKTCRGQS8R8214JJH2",#AI response
+                   "01JGMPEGCD0EX4TXSSNEY3A670" #AI response
+                   )
+
+final_game_set <- "run_v3"
+
+target_experiment_names <- list.files(here("data", "processed_data", final_game_set))
+
+# condition names
+
+old_conditions <- c('noncomp','comp-within','comp-between')
+new_conditions_long <- c('No Competitor','Within Trial','Across Trial')
+new_conditions_short <- c('No Comp','Comp Within','Comp Between')
+```
+
+set theme
+
+```{r}
+theme_jmank <- function(base_size = 10) {
+  theme_minimal(base_size = base_size) %+replace%
+    theme(
+      plot.title = element_text(size = rel(1), face = "bold", margin = margin(0,0,5,0), hjust = 0),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank(),
+      # Les axes
+      axis.title = element_text(size = rel(0.85), face = "bold"),
+      axis.text = element_text(size = rel(0.70), face = "bold"),
+      axis.line = element_line(color = "black"),
+      legend.title = element_text(size = rel(0.85), face = "bold"),
+      legend.text = element_text(size = rel(0.70), face = "bold"),
+      legend.key = element_rect(fill = "transparent", colour = NA),
+      legend.key.size = unit(1.5, "lines"),
+      legend.position = "bottom",
+      legend.background = element_rect(fill = "transparent", colour = NA),
+      strip.text = element_text(size = rel(0.85), face = "bold", margin = margin(5,0,5,0))
+    )
+}
+```
+
+
+## Data Importing
+
+All data from these folders was generated using the `00.preprocessed.R` R script. 
+
+Helper functions:
+
+```{r}
+load_data <- function(data_name, study_list) {
+  source_files <- list.files(path = here("data", "processed_data", final_game_set),
+             recursive = TRUE,
+            pattern = paste0(data_name, ".csv$"),
+             full.names = TRUE)
+  
+  mod_read_csv <- function(data_file, data_name){
+    read.csv(data_file)
+  }
+  
+  data_files <- source_files[Reduce("|", lapply(study_list, function(x) grepl(x, source_files)))]
+  do.call(bind_rows, lapply(data_files, mod_read_csv))
+}
+```
+
+Load data :
+
+```{r}
+d_game <- load_data("games", target_experiment_names)
+d_round <- load_data("rounds", target_experiment_names)
+d_chat <- load_data("chats", target_experiment_names)
+d_players <- load_data("players", target_experiment_names)
+d_chat_similarity <- read_csv(here('data/processed_data/message_similarities.csv'))
+```
+### Relevel Condition Factor
+
+```{r}
+d_game$contextStructure_f <- factor(d_game$contextStructure, levels=old_conditions,
+  labels=new_conditions_long)
+
+d_game <- d_game %>% mutate(contextStructure_f = relevel(contextStructure_f, ref = 'No Competitor'))
+```
+
+## Preregistered Exclusions
+
+Two key exclusions (of games that were able to start successfully ie have at least 1 response):
+
+1) Exclude games with fewer than 50% (32) responses
+2) Exclude games where accuracy was less than 75%
+
+Non-registered exclusions: Exclude games were the output is suspiciously AI-like
+
+```{r}
+game_stats <- d_round |> 
+              left_join(d_game) |> 
+              group_by(gameID, contextStructure, contextStructure_f) |> 
+              summarize(n_correct = sum(correct, na.rm = T),
+                n_responses = sum(!is.na(response))) %>% 
+  filter(n_responses > 0) %>% 
+  mutate(non_response_rate = n_responses < 32,
+         inaccuracy = n_correct/n_responses < .75,
+         blacklist = gameID %in% game_blacklist,
+         kept_game = ! non_response_rate & ! inaccuracy & ! blacklist)
+
+non_response <- game_stats %>% 
+  group_by(non_response_rate, inaccuracy, blacklist, kept_game) |> 
+  summarise(n_games = n_distinct(gameID)) %>% 
+  filter(non_response_rate)
+
+inaccuracy <- game_stats %>% 
+  group_by(non_response_rate, inaccuracy, blacklist, kept_game) |> 
+  summarise(n_games = n_distinct(gameID)) %>% 
+  filter(!non_response_rate, inaccuracy)
+
+blacklist <- game_stats %>% 
+  group_by(non_response_rate, inaccuracy, blacklist, kept_game) |> 
+  summarise(n_games = n_distinct(gameID)) %>% 
+  filter(blacklist)
+
+final_n <- game_stats %>% 
+  group_by(contextStructure, contextStructure_f, kept_game) |> 
+  summarise(n_games = n_distinct(gameID)) %>% 
+  pivot_wider(names_from = kept_game, values_from=n_games) %>% 
+  rename("excluded" = `FALSE`, "included" = `TRUE`) %>% 
+  mutate(prop_excluded = excluded/(excluded+included))
+final_n
+```
+
+
+```{r}
+final_n
+```
+
+
+Do exclusions:
+
+```{r}
+d_game_f <- d_game %>% left_join(game_stats %>% select(gameID, kept_game)) %>% filter(kept_game)
+d_round_f <- d_round %>% left_join(game_stats %>% select(gameID, kept_game)) %>% filter(kept_game)
+d_chat_f <- d_chat %>% left_join(d_round_f %>% select(roundID, kept_game, gameID)) %>% filter(kept_game)
+d_players_f <- d_players %>% left_join(game_stats %>% select(gameID, kept_game)) %>% filter(kept_game)
+d_chat_similarity_f <- d_chat_similarity %>% left_join(game_stats %>% select(gameID, kept_game)) %>% filter(kept_game)
+```
+
+### Paper Text
+
+Participants were recruited from the online platform Prolific. All participants were required to be native English speakers located in the US, UK, or Canada. Dyads were excluded from analysis (but still compensated) if they were missing more than 32 (50%) trials (n=`r sum(non_response$n_games)`) or failed to identify the correct target more than 75% of the time (n=`r inaccuracy$n_games`). Two additional dyads were excluded because their messages displayed clear markers of AI-generated text (e.g., unusually long, instructional descriptions like "The black box surrounding it suggests it is a target object...Let me know if you need more insights!"). The final sample includes 332 dyads across three conditions (n=`r final_n %>% filter(contextStructure == "noncomp") %>% pull(included)` dyads in the no-competitor condition, n=`r final_n %>% filter(contextStructure == "comp-within") %>% pull(included)` in the within-trial competitor condition, and n=`r final_n %>% filter(contextStructure == "comp-between") %>% pull(included)` in the across-trial competitor condition). Participants received a base payment of \$8.25 plus a \$0.03 bonus for each correct response.
+
+## Reference Game Replications
+
+### Accuracy over time
+
+First, we examine how the dyads perform over the course of the game, looking at the accuracy over time across games in different conditions.
+
+#### Data
+
+```{r}
+d_rounds_game <- d_round_f %>% 
+  filter(kept_game)  |> 
+  left_join(d_game_f) %>% 
+  mutate(index_scaled = scale(index))
+
+d_accuracy <- d_round_f %>% 
+  filter(kept_game)  |> 
+  left_join(d_game_f) |> 
+  filter(!is.na(response)) |> 
+  group_by(index, contextStructure_f) |> 
+  summarize(n_games = n_distinct(gameID),
+            n_correct = sum(correct),
+            prop_correct = n_correct/n_games)
+```
+
+
+#### Model
+
+```{r}
+# Fit logistic mixed effects model 
+acc_model <- glmer(correct ~ contextStructure_f * index_scaled + 
+                   (1 | gameID) + (1 | target),
+                   family = binomial,
+                   control = glmerControl(optimizer = "bobyqa"),
+                   data = d_rounds_game)
+
+# Get model summary
+summary(acc_model)
+```
+
+#### Model Text
+
+A key indicator of successful convention formation is participants' increasing ability to identify the correct target shape. To measure accuracy, we fit a mixed-effects logistic regression predicting correct responses from condition, trial number (scaled), and their interaction, including random intercepts for both dyad and the target shape. This analysis revealed that participants became significantly more accurate over time ($\beta = .83$, $SE = .05$, $p < .001$, see Fig. \ref{fig:acc-n-sim}a). By the final block, accuracy was near ceiling across all conditions, suggesting participants successfully coordinated. However, high accuracy alone does not necessarily indicate convention formation - we next examine how referring expressions themselves changed over time. 
+
+#### Plot
+
+Summarized across games
+
+```{r}
+d_acc <- d_round_f %>% 
+  filter(kept_game)  |> 
+  left_join(d_game_f) |> 
+  filter(!is.na(response)) |> 
+  group_by(index, contextStructure_f) |> 
+  summarize(n_games = n_distinct(gameID),
+            n_correct = sum(correct),
+            prop_correct = n_correct/n_games)
+
+p_acc <- d_acc %>% 
+  ggplot(aes(x = index, y = prop_correct, color = contextStructure_f)) + 
+  geom_vline(xintercept = c(16, 32, 48), linetype = "dashed") +
+  geom_point(alpha = .3) + 
+  theme_minimal() + 
+  geom_smooth(aes(fill = contextStructure_f))
+p_acc
+```
+
+Distribution of response correctness across games
+
+```{r}
+d_round_f %>% 
+  filter(kept_game) |> left_join(d_game_f) |> 
+  filter(!is.na(response)) |> 
+  ggplot(aes(x = index, y = correct, color = contextStructure_f)) + 
+  geom_point(position = position_dodge(width = .2), alpha = .01) +  
+  labs(x = "Round Num.", y = "Response Correct", color = "Condition") + 
+  scale_color_manual(values = color_map) + 
+  theme_jmank()
+  
+```
+
+### Word Count
+
+Count the number of words in each utterance.
+
+```{r}
+d_chat_cleaned <- d_chat_f %>% 
+  full_join(d_round_f) |> 
+  left_join(d_game_f) |> 
+  filter(kept_game) %>% 
+ filter(director_msg) %>% 
+  filter(!chit_chat | is.na(chit_chat)) %>% #filter out chit-chat
+  mutate(text = gsub('[[:punct:] ]+',' ',text), #stripping some punctuation
+         text = str_squish(text),
+         utt_length_chars = str_length(text), 
+         utt_length_words = str_count(text, "\\W+") + 1)
+
+d_chat_word_counts <-d_chat_cleaned %>% 
+  group_by(gameID, index, repNum, playerID, contextStructure_f) %>%
+  summarize(text = paste0(text, collapse = ', '),
+            total_num_words = sum(utt_length_words),
+            total_num_chars = sum(utt_length_chars))
+```
+#### Paper Text
+Word counts:
+
+
+The processed dataset contains `r nrow(d_chat_word_counts)` unique referring expressions. All messages were cleaned by removing punctuation¹, removing trailing white-space, and converting to lowercase.
+
+#### Model
+
+```{r}
+word_count_model <- glmer(total_num_words ~ contextStructure_f * poly(index, 2) +
+                         (1 + poly(index, 1) | gameID),  
+                         family = poisson,
+                         control = glmerControl(optimizer = "bobyqa"),
+                         data = d_chat_word_counts)
+summary(word_count_model)
+```
+#### Model Paper Text
+
+Another hallmark of convention formation is the reduction of referring expression length over time. We modeled word counts using a Poisson mixed-effects regression with condition, trial number (modeled with orthogonal polynomials to capture non-linear trends), and their interaction as fixed effects, plus by-dyad random intercepts and slopes for trial number. The analysis revealed a significant reduction in description length over time (β = -34.68, SE = 2.11, p < .001; Fig. 3b). Notably, conditions differed in their overall verbosity - participants in the within-trial competitor condition used longer descriptions than baseline (β = 0.15, SE = 0.06, p = .01), while the across-trial competitor condition used shorter ones (β = -0.34, SE = 0.06, p < .001). However, this reduction in length alone does not necessarily indicate successful convention formation - participants may simply become more comfortable with the task over time without establishing stable referring expressions. To test whether true conventions emerged, we next examine how descriptions for individual shapes evolved over repeated references.
+
+#### Plot
+
+```{r}
+d_word_counts <- d_chat_word_counts %>% 
+  group_by(index, contextStructure_f) %>% 
+  summarize(mean_n_words = mean(total_num_words, na.rm = T),
+            sd_n_words = sd(total_num_words, na.rm = T))
+
+p_word_counts <- d_word_counts %>% 
+  ggplot(aes(x = index + 1, y = mean_n_words, color = contextStructure_f)) +
+  geom_vline(xintercept = c(16, 32, 48), linetype = "dashed") +
+  geom_point(alpha = .3) + 
+  geom_smooth(aes(fill = contextStructure_f))
+
+
+p_word_counts
+```
+
+
+### Across Block Transition Utterance Similarity
+
+Here, we're looking at how similar the description is for a single tangram from one round to the next. 
+
+```{r}
+d_chat_similarity_full <- d_chat_similarity_f |> 
+  left_join(d_round |> select("roundID1"="roundID","target1"="target", "index1" = "index", "repNum1" = "repNum")) |> 
+  left_join(d_round |> select("roundID2"="roundID","target2"="target", "index2" = "index", "repNum2" = "repNum")) |> 
+  left_join(d_game |> select("gameID", "contextStructure_f", "rotation"))
+```
+
+
+```{r}
+sim_by_tangram <- d_chat_similarity_full |> 
+   # chats for the same target
+  filter(target1 == target2) |>  #same game
+    rowwise() |> 
+    mutate(rep_trans = paste(min(repNum1+1, repNum2+1), 
+                             max(repNum1+1, repNum2+1), sep = "->")) |> 
+    ungroup() |> 
+    filter(rep_trans %in% c("0->1", "1->2","2->3", "3->4")) |> 
+  mutate(rep_trans = factor(rep_trans, 
+                           levels = c("0->1", "1->2", "2->3", "3->4"))) %>% 
+  group_by(gameID, rep_trans, target1, contextStructure_f) |> 
+  summarize(mean_sim = mean(similarity, rm.na = T),
+            sd_sim = sd(similarity))
+
+sim_by_game <- sim_by_tangram |> 
+  group_by(gameID, rep_trans, contextStructure_f) |> 
+  summarize(mean_sim = mean(mean_sim, rm.na = T),
+            sd_sim = sd(mean_sim))
+
+sim_across_game <- sim_by_game |> 
+  group_by(rep_trans, contextStructure_f) |> 
+  summarize(mean_sim = mean(mean_sim, rm.na = T),
+            sd_sim = sd(mean_sim))
+```
+
+
+#### Model
+
+```{r}
+convention_model <- lmer(mean_sim ~ rep_trans * contextStructure_f + 
+                        (1 | gameID),
+                        data = sim_by_tangram)
+
+summary(convention_model)
+```
+
+#### Paper Text
+
+3.1.3 Description Stability
+
+To confirm that participants formed true conventions rather than simply producing shorter descriptions due to task familiarity, we examined how descriptions for the same shape evolved across repeated references. We measured stability by computing cosine similarities between SBERT embeddings of descriptions for the same tangram across consecutive blocks, and modeled these similarities using a linear mixed-effects regression with condition, block transition, and their interaction as fixed effects, plus random intercepts for dyad.
+
+The analysis revealed increasing similarity across blocks in all conditions, with descriptions becoming more similar between blocks 2-3 (β = 0.08, SE = 0.01, p < .001) and blocks 3-4 (β = 0.13, SE = 0.01, p < .001; Fig. 3c). Notably, this conventionalization was stronger in both compositional conditions compared to the baseline (block 3-4 increases: Within β = 0.06, Between β = 0.08, both p < .001). This suggests that the presence of shared visual components supported more stable convention formation, regardless of how these components were distributed in the communicative context. Having established successful convention formation across conditions, we next examine how the structure of these conventions differed based on communicative context.
+
+
+#### Plot
+
+```{r}
+d_sim_model <- sim_by_game %>% 
+  group_by(contextStructure_f, rep_trans) %>% 
+  tidyboot_mean(column = mean_sim)
+
+p_sim_trans <- d_sim_model %>% 
+  ggplot(aes(x = rep_trans, y = empirical_stat, color = contextStructure_f)) + 
+  geom_jitter(data = sim_by_game, 
+              aes(x = rep_trans, y = mean_sim), alpha = .075, 
+                position = position_dodge(width = .2))+
+    geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, 
+                    fill = contextStructure_f, 
+                    group = contextStructure_f), 
+                color = NA, alpha = .3)+
+  geom_point(stat = 'identity') +
+  geom_line(aes(group = contextStructure_f), size = 1)
+
+p_sim_trans
+```
+
+### Similarity Within Block
+
+```{r}
+d_sim_round <- d_chat_similarity_full |> 
+  filter(repNum1 == repNum2) |> 
+  group_by(gameID, contextStructure_f, repNum1) |> 
+  summarize(n = n(),
+            mean_sim = mean(similarity))
+
+d_sim_game <- d_sim_round |> 
+  group_by(contextStructure_f, repNum1) |> 
+  summarize(n = n(),
+            mean_sim = mean(mean_sim))
+```
+
+
+#### Model
+
+```{r}
+block_sim_model <- lmer(similarity ~ contextStructure_f * repNum1 + 
+                          (1 | gameID),  
+                          data = d_chat_similarity_full)
+
+summary(block_sim_model)
+```
+#### Paper Text
+
+We first examined how systematically participants described shapes within each block by measuring the pairwise similarities between all descriptions produced during that block. If participants develop structured conventions that systematically refer to shape components, we should see higher similarity between descriptions within a block, even for different shapes. We measured this by computing pairwise cosine similarities between SBERT embeddings of descriptions within each block and fit a linear mixed-effects regression predicting similarity from condition, block number, and their interaction, with random intercepts for dyad.
+
+The analysis revealed that descriptions in both compositional conditions showed higher within-block similarity compared to the non-compositional baseline (Within: β = 0.08, SE = 0.01, p < .001; Between: β = 0.04, SE = 0.01, p < .001). While similarity decreased over blocks in the baseline condition (β = -0.008, SE = 0.0004, p < .001), both compositional conditions showed increasing within-block similarity over time (interaction with block: β ≈ 0.03, SE = 0.0006, p < .001 for both conditions). This suggests that participants in the compositional conditions developed increasingly systematic ways of describing different shapes within each block. However, this pattern alone could simply reflect the greater visual similarity between shapes that share components rather than true compositional structure in the descriptions themselves.
+
+#### Plot
+
+```{r}
+d_sim_round_boot <- d_sim_round %>% 
+  group_by(contextStructure_f, repNum1) %>% 
+  tidyboot_mean(column = mean_sim)
+
+p_sim_blocks <- d_sim_round_boot %>% 
+  ggplot(aes(x = repNum1 + 1, y = empirical_stat, color = contextStructure_f)) + 
+    geom_jitter(data = d_sim_round, 
+                aes(x = repNum1 + 1, y = mean_sim), alpha = .075, 
+                position = position_dodge(width = .2))+
+     geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, 
+                    fill = contextStructure_f, 
+                    group = contextStructure_f), 
+                color = NA, alpha = .3) +
+  geom_point(stat = 'identity') +
+  geom_line(size = 1)
+
+p_sim_blocks
+```
+
+
+## Language Structure
+
+### Shape Description Asymmetry 
+
+```{r}
+
+d_chat_similarity_full <- d_chat_similarity_full |> 
+  mutate(top1 = str_extract(target1, "(?<=/)[^/]+(?=_)"),
+         top2 = str_extract(target2, "(?<=/)[^/]+(?=_)"),
+         bottom1 = str_extract(target1, "(?<=_)[^_]+(?=\\.png)"),
+         bottom2 = str_extract(target2, "(?<=_)[^_]+(?=\\.png)"))
+
+game_rounds <- d_chat_f %>%
+  filter(chit_chat == "FALSE",
+         director_msg == "TRUE") %>% 
+  group_by(gameID) %>%
+  summarise(rounds = list(unique(roundID))) 
+
+# Now create the crossings within each game
+crossed_pairs <- do.call(rbind, lapply(1:nrow(game_rounds), function(i) {
+  game <- game_rounds$gameID[i]
+  rounds <- unlist(game_rounds$rounds[i])
+  
+  # Cross only the rounds within this game
+  crossing(
+    gameID = game,
+    roundID1 = rounds,
+    roundID2 = rounds
+  )
+}))
+
+swapped_sim_df <- d_chat_similarity_full %>%
+  # Rename all columns ending in 1 to temporary names
+  rename_with(~paste0(., "_temp"), ends_with("1")) %>%
+  # Rename all columns ending in 2 to end in 1
+  rename_with(~sub("2", "1", .), ends_with("2")) %>%
+  # Rename temp columns to end in 2
+  rename_with(~sub("1_temp", "2", .), ends_with("1_temp"))
+
+all_sets <- bind_rows(d_chat_similarity_full, swapped_sim_df)
+
+sim_pairs <- crossed_pairs %>% 
+  left_join(all_sets) %>% 
+  filter(roundID1 != roundID2) #remove self-similarity
+
+subshape_over_round_game <- sim_pairs |> 
+  filter(repNum1 ==repNum2,
+         target1 != target2) |> 
+  mutate(match = case_when(top1 == top2 ~ "top-match",
+                           bottom1 == bottom2 ~ "bottom-match",
+                           TRUE ~ "non-match")) |> 
+  group_by(gameID, match, repNum1, contextStructure_f, target1) |> 
+  summarise(mean_sim = mean(similarity))
+```
+
+```{r}
+shape_sim_rounds <- subshape_over_round_game %>% 
+  filter(match != "non-match") %>% 
+  pivot_wider(names_from = match, values_from = mean_sim)
+
+diffs_by_tangram = shape_sim_rounds %>% 
+  mutate(sim_diff = abs(`bottom-match` - `top-match`))
+
+diffs_by_tangram_by_game <- diffs_by_tangram %>% 
+  group_by(gameID, contextStructure_f, repNum1) %>% 
+  summarize(mean_sim_diff = mean(sim_diff, na.rm=T))
+
+d_diffs <- diffs_by_tangram_by_game %>% 
+  group_by(repNum1, contextStructure_f) %>% 
+  summarize(mean_sim_diff = mean(mean_sim_diff, na.rm=T))
+```
+
+
+#### Model
+
+```{r}
+diff_sim_model <- lmer(sim_diff ~ contextStructure_f * repNum1 + 
+                          (1 | gameID),  
+                          data = diffs_by_tangram)
+
+summary(diff_sim_model)
+```
+
+#### Paper Text
+
+Finally, we examined whether the two compositional conditions differed in how they leveraged the shared structure of the shapes. For each shape, we compared how similar its descriptions were to shapes sharing one component versus shapes sharing the other component. A small difference between these similarities would indicate balanced reference to both components, while a large difference would suggest focused reference to just one component. The compositional-between condition not only started with larger differences between component similarities (β = 0.069, p < .001), but these differences grew larger over blocks (β = 0.054, p < .001). In contrast, the compositional-within condition maintained consistently small differences (no significant change over blocks: β = 0.0009, p = .78). This pattern suggests that while compositional-within participants maintained descriptions that referenced both components (e.g., "curved piece with pointed piece"), compositional-between participants increasingly focused on single distinguishing components (e.g., "curved piece").
+
+#### Plot
+
+```{r}
+d_chat_word_counts
+```
+
+
+```{r}
+diffs_by_tangram %>% 
+  left_join(d_chat_word_counts %>% rename(repNum1 = repNum,
+                                          ))
+```
+
+
+```{r}
+d_diffs_boot <- diffs_by_tangram %>% 
+  group_by(contextStructure_f, repNum1) %>% 
+  tidyboot_mean(column = sim_diff, na.rm = T)
+
+
+p_sim_diffs <- d_diffs_boot %>% 
+  ggplot(aes(x = repNum1, color = contextStructure_f,shape = contextStructure_f,  y = empirical_stat)) + 
+  geom_line() + 
+  geom_point() +
+  geom_jitter(data = diffs_by_tangram_by_game, aes(y = mean_sim_diff), 
+              position = position_jitterdodge(dodge.width = .5, 
+                                             jitter.width = 0.25), alpha = .5) + 
+geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = contextStructure_f), 
+                color = NA, alpha = .2)
+
+p_sim_diffs
+```
+
+## Write Figs for Pub
+
+### Accuracy
+
+```{r}
+p_acc_final <- p_acc  +
+  labs(title = "Dyads Quickly Become Accurate",
+       x = "Trial Number", 
+       y = "Proportion of Correct Responses", 
+       color = "Subshape Competitor",
+       fill = "Subshape Competitor") + 
+  scale_color_manual(values = color_map) + 
+  scale_fill_manual(values = color_map) + 
+  theme_jmank() + 
+  guides(color=guide_legend(title.position="top"),
+         fill=guide_legend(title.position="top"))
+p_acc_final
+ggsave(filename = here(fig_write_path, "prop_correct.png"), width = 3.5, height = 3)
+```
+
+### Word Count
+
+```{r}
+p_word_counts_final <- p_word_counts + 
+  labs(x = "Trial Number", 
+       y = "Mean Number of Words", 
+       title = "Directors Use Fewer Words", 
+      color = "Subshape Competitor",
+       fill = "Subshape Competitor") + 
+  scale_color_manual(values = color_map) + 
+  scale_fill_manual(values = color_map) + 
+  theme_jmank() +
+  guides(color = "none", fill="none")
+
+p_word_counts_final
+
+ggsave(filename = here(fig_write_path, "n_words.png"), width = 3.5, height = 3)
+
+```
+
+### Word Count and Accuracy
+
+```{r}
+library(patchwork)
+
+p_acc_final + p_word_counts_final + 
+  plot_layout(guides = "collect") + 
+  plot_annotation(tag_levels = 'A') & 
+  theme(legend.position = "bottom", 
+        legend.direction = "horizontal",
+        legend.justification = "left")
+
+ggsave(filename = here(fig_write_path, "accuracy_and_n_words_long.png"), width = 6, height = 3)
+
+p_acc_final / p_word_counts_final + 
+  plot_layout(guides = "collect") + 
+  plot_annotation(tag_levels = 'A') & 
+  theme(legend.position = "bottom", 
+        legend.direction = "horizontal",
+        legend.justification = "left")
+
+ggsave(filename = here(fig_write_path, "accuracy_and_n_words_stacked.png"), 
+       width = 3.5, height = 5)
+
+```
+
+### Sim across blocks
+
+```{r}
+p_sim_trans_final <- p_sim_trans +
+  labs(x = "Block Transition",
+       y = "Pairwise Similarity",
+       title = "Similarity of Shape Descriptions",
+       subtitle = "In Consecutive Blocks",
+      color = "Subshape Competitor",
+       fill = "Subshape Competitor") + 
+  scale_color_manual(values = unlist(color_map)) + 
+  scale_fill_manual(values = color_map) + 
+  ylim(.45, .9) + 
+  guides(color=guide_legend(title.position="top"),
+         fill=guide_legend(title.position="top")) +
+  theme_jmank() +
+    theme(legend.position = "bottom", 
+        legend.direction = "horizontal",
+        legend.justification = "left")
+
+p_sim_trans_final
+
+ggsave(filename = here(fig_write_path, "sim_trans.png"), 
+       width = 3.25, height = 3)
+```
+
+### Word Count, Accuracy, Transition
+
+```{r}
+p_acc_final + p_word_counts_final + p_sim_trans_final + guides(color = "none",
+                                                               fill = "none") +
+  plot_layout(guides = "collect") + 
+  plot_annotation(tag_levels = 'A') & 
+  theme(legend.position = "bottom", 
+        legend.direction = "horizontal",
+        legend.justification = "center")
+
+ggsave(filename = here(fig_write_path, "acc_numword_shapesim.png"), 
+       width = 8, height = 3)
+```
+
+
+### Sim Within Blocks
+
+```{r}
+p_sim_blocks_final <- p_sim_blocks +
+  labs(x = "Block",
+       y = "Mean Pairwise Similarity",
+       title = "Pairwise Similarity of Shape Descriptions",
+       subtitle = "Between Shapes in the Same Block",
+      color = "Subshape Competitor",
+       fill = "Subshape Competitor") + 
+  scale_color_manual(values = unlist(color_map)) + 
+  scale_fill_manual(values = unlist(color_map)) + 
+  ylim(0.15, 0.6) +
+  guides(color=guide_legend(title.position="top"),
+         fill=guide_legend(title.position="top")) +
+  theme_jmank()  +
+    theme(legend.position = "bottom", 
+        legend.direction = "horizontal",
+        legend.justification = "left")
+
+p_sim_blocks_final
+
+ggsave(filename = here(fig_write_path, "sim_block.png"), 
+       width = 3.25, height = 3)
+```
+
+### Description Asymmetry
+
+```{r}
+p_sim_diffs_final <- p_sim_diffs +
+  theme_minimal() + 
+  scale_color_manual(values = unlist(color_map)) + 
+  scale_fill_manual(values = unlist(color_map)) + 
+  labs(x = "Block Number",
+       y = "Abs. Average Similarity Difference",
+       title = "Comp Within Descriptions are more asymetric",
+       color = "Condition",
+       fill = "Condition",
+       shape = "Condition") +
+  theme(legend.position = "bottom") + 
+  theme_jmank()
+
+p_sim_diffs_final
+
+ggsave(filename = here(fig_write_path, "sim_diffs.png"), 
+       width = 3.25, height = 3)
+```
+
