@@ -185,13 +185,12 @@ d_accuracy <- d_round_f %>%
             prop_correct = n_correct/n_games)
 ```
 
-
 #### Model
 
 ```{r}
 # Fit logistic mixed effects model 
 acc_model <- glmer(correct ~ contextStructure_f * index_scaled + 
-                   (1 | gameID) + (1 | target),
+                   (1 + index_scaled | gameID) + (1 + index_scaled | target),
                    family = binomial,
                    control = glmerControl(optimizer = "bobyqa"),
                    data = d_rounds_game)
@@ -202,7 +201,7 @@ summary(acc_model)
 
 #### Model Text
 
-A key indicator of successful convention formation is participants' increasing ability to identify the correct target shape. To measure accuracy, we fit a mixed-effects logistic regression predicting correct responses from condition, trial number (scaled), and their interaction, including random intercepts for both dyad and the target shape. This analysis revealed that participants became significantly more accurate over time ($\beta = .83$, $SE = .05$, $p < .001$, see Fig. \ref{fig:acc-n-sim}a). By the final block, accuracy was near ceiling across all conditions, suggesting participants successfully coordinated. However, high accuracy alone does not necessarily indicate convention formation - we next examine how referring expressions themselves changed over time. 
+A key indicator of successful convention formation is participants' increasing ability to identify the correct target shape. To measure accuracy, we fit a mixed-effects logistic regression predicting correct responses from condition, trial number (scaled), and their interaction, including random intercepts for both dyad and the target shape. This analysis revealed that participants became significantly more accurate over time ($\beta = .80$, $SE = .04$, $p < .001$, see Fig. \ref{fig:acc-n-sim}a). By the final block, accuracy was near ceiling across all conditions, suggesting participants successfully coordinated. However, high accuracy alone does not necessarily indicate convention formation - we next examine how referring expressions themselves changed over time. 
 
 #### Plot
 
@@ -223,7 +222,8 @@ p_acc <- d_acc %>%
   geom_vline(xintercept = c(16, 32, 48), linetype = "dashed") +
   geom_point(alpha = .3) + 
   theme_minimal() + 
-  geom_smooth(aes(fill = contextStructure_f))
+  geom_smooth(aes(fill = contextStructure_f),se=F, method = "glm", method.args = list(family = "binomial"))
+
 p_acc
 ```
 
@@ -258,7 +258,7 @@ d_chat_cleaned <- d_chat_f %>%
          utt_length_words = str_count(text, "\\W+") + 1)
 
 d_chat_word_counts <-d_chat_cleaned %>% 
-  group_by(gameID, index, repNum, playerID, contextStructure_f) %>%
+  group_by(gameID, index, repNum, playerID, target, contextStructure_f) %>%
   summarize(text = paste0(text, collapse = ', '),
             total_num_words = sum(utt_length_words),
             total_num_chars = sum(utt_length_chars))
@@ -295,7 +295,9 @@ p_word_counts <- d_word_counts %>%
   ggplot(aes(x = index + 1, y = mean_n_words, color = contextStructure_f)) +
   geom_vline(xintercept = c(16, 32, 48), linetype = "dashed") +
   geom_point(alpha = .3) + 
-  geom_smooth(aes(fill = contextStructure_f))
+  geom_smooth(aes(fill = contextStructure_f), 
+              method = "glm", se=F, 
+              formula = y ~ x + I(x^2))
 
 
 p_word_counts
@@ -357,7 +359,7 @@ summary(convention_model)
 
 To confirm that participants formed true conventions rather than simply producing shorter descriptions due to task familiarity, we examined how descriptions for the same shape evolved across repeated references. We measured stability by computing cosine similarities between SBERT embeddings of descriptions for the same tangram across consecutive blocks, and modeled these similarities using a linear mixed-effects regression with condition, block transition, and their interaction as fixed effects, plus random intercepts for dyad.
 
-The analysis revealed increasing similarity across blocks in all conditions, with descriptions becoming more similar between blocks 2-3 (β = 0.08, SE = 0.01, p < .001) and blocks 3-4 (β = 0.13, SE = 0.01, p < .001; Fig. 3c). Notably, this conventionalization was stronger in both compositional conditions compared to the baseline (block 3-4 increases: Within β = 0.06, Between β = 0.08, both p < .001). This suggests that the presence of shared visual components supported more stable convention formation, regardless of how these components were distributed in the communicative context. Having established successful convention formation across conditions, we next examine how the structure of these conventions differed based on communicative context.
+The analysis revealed increasing similarity across blocks in all conditions, with descriptions becoming more similar between blocks 2-3 (β = 0.07, SE = 0.007, p < .001) and blocks 3-4 (β = 0.14, SE = 0.007, p < .001; Fig. 3c). Notably, this conventionalization was stronger in both compositional conditions compared to the baseline (block 3-4 increases: Within β = 0.04, Between β = 0.07, both p < .001). This suggests that the presence of shared visual components supported more stable convention formation, regardless of how these components were distributed in the communicative context. Having established successful convention formation across conditions, we next examine how the structure of these conventions differed based on communicative context.
 
 
 #### Plot
@@ -435,6 +437,10 @@ p_sim_blocks <- d_sim_round_boot %>%
 p_sim_blocks
 ```
 
+
+##### Figure Caption
+
+Average similarity between descriptions within each block, by condition. Points show mean similarity between all pairs of descriptions produced within the same block. The shaded region indicates 95% confidence intervals. While similarity decreases over blocks in the non-compositional condition (orange), both compositional conditions show increasing similarity, suggesting the emergence of systematic descriptive strategies. Individual data points show similarities for each dyad.
 
 ## Language Structure
 
@@ -525,16 +531,6 @@ Finally, we examined whether the two compositional conditions differed in how th
 
 #### Plot
 
-```{r}
-d_chat_word_counts
-```
-
-
-```{r}
-diffs_by_tangram %>% 
-  left_join(d_chat_word_counts %>% rename(repNum1 = repNum,
-                                          ))
-```
 
 
 ```{r}
@@ -620,6 +616,9 @@ p_acc_final / p_word_counts_final +
 ggsave(filename = here(fig_write_path, "accuracy_and_n_words_stacked.png"), 
        width = 3.5, height = 5)
 
+ggsave(filename = here(fig_write_path, "accuracy_and_n_words_stacked.pdf"), 
+       width = 3.5, height = 5)
+
 ```
 
 ### Sim across blocks
@@ -644,7 +643,10 @@ p_sim_trans_final <- p_sim_trans +
 
 p_sim_trans_final
 
-ggsave(filename = here(fig_write_path, "sim_trans.png"), 
+#ggsave(filename = here(fig_write_path, "sim_trans.png"), 
+#       width = 3.25, height = 3)
+
+ggsave(filename = here(fig_write_path, "sim_trans.pdf"), 
        width = 3.25, height = 3)
 ```
 
@@ -688,6 +690,8 @@ p_sim_blocks_final
 
 ggsave(filename = here(fig_write_path, "sim_block.png"), 
        width = 3.25, height = 3)
+ggsave(filename = here(fig_write_path, "sim_block.pdf"), 
+       width = 3.25, height = 3)
 ```
 
 ### Description Asymmetry
@@ -698,8 +702,8 @@ p_sim_diffs_final <- p_sim_diffs +
   scale_color_manual(values = unlist(color_map)) + 
   scale_fill_manual(values = unlist(color_map)) + 
   labs(x = "Block Number",
-       y = "Abs. Average Similarity Difference",
-       title = "Comp Within Descriptions are more asymetric",
+       y = "Component similarity difference",
+       title = "Selective component reference",
        color = "Condition",
        fill = "Condition",
        shape = "Condition") +
@@ -709,6 +713,8 @@ p_sim_diffs_final <- p_sim_diffs +
 p_sim_diffs_final
 
 ggsave(filename = here(fig_write_path, "sim_diffs.png"), 
-       width = 3.25, height = 3)
+       width = 3.375, height = 3)
+ggsave(filename = here(fig_write_path, "sim_diffs.pdf"), 
+       width = 3.375, height = 3)
 ```
 
