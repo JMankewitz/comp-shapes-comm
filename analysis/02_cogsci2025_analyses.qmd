@@ -718,3 +718,153 @@ ggsave(filename = here(fig_write_path, "sim_diffs.pdf"),
        width = 3.375, height = 3)
 ```
 
+## Talk Plots
+
+```{r}
+library(ggreveal)
+talk_write_path <- here("analysis/figures/prosem_4-2")
+
+
+theme_jmank_talk <- function(base_size = 16) {
+  theme_minimal(base_size = base_size) %+replace%
+    theme(
+      plot.title = element_text(size = rel(1), face = "bold", margin = margin(0,0,5,0), hjust = 0),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank(),
+      # Les axes
+      axis.title = element_text(size = rel(0.85), face = "bold"),
+      axis.text = element_text(size = rel(0.70), face = "bold"),
+      axis.line = element_line(color = "black"),
+      legend.title = element_text(size = rel(0.85), face = "bold"),
+      legend.text = element_text(size = rel(0.70), face = "bold"),
+      legend.key = element_rect(fill = "transparent", colour = NA),
+      legend.key.size = unit(1.5, "lines"),
+      legend.position = "bottom",
+      legend.background = element_rect(fill = "transparent", colour = NA),
+      strip.text = element_text(size = rel(0.85), face = "bold", margin = margin(5,0,5,0))
+    )
+}
+```
+
+### Accuracy
+
+```{r}
+p_acc_final <- p_acc  +
+  labs(title = "Dyad Accuracy Over Time",
+       x = "Trial Number", 
+       y = "Proportion of Correct Responses", 
+       color = "Subshape Competitor",
+       fill = "Subshape Competitor") + 
+  scale_color_manual(values = color_map) + 
+  scale_fill_manual(values = color_map) + 
+  theme_jmank_talk(base_size = 8) + 
+  guides(color=guide_legend(title.position="top"),
+         fill=guide_legend(title.position="top"))
+
+reveal_save(reveal_aes(p_acc_final), "accuracy.png", width = 2.5, height = 2.5, path = talk_write_path)
+```
+
+```{r}
+p_word_counts_final <- p_word_counts + 
+  labs(x = "Trial Number", 
+       y = "Mean Number of Words", 
+       title = "Director Word Count", 
+      color = "Subshape Competitor",
+       fill = "Subshape Competitor") + 
+  scale_color_manual(values = color_map) + 
+  scale_fill_manual(values = color_map) + 
+  theme_jmank_talk(base_size = 8) + 
+  guides(color=guide_legend(title.position="top"),
+         fill=guide_legend(title.position="top"))
+
+p_word_counts_final
+
+reveal_save(reveal_aes(p_word_counts_final), "word_count.png", width = 2.5, height = 2.5, path = talk_write_path)
+```
+
+### Similarity
+
+```{r}
+p_sim_trans_final <- p_sim_trans +
+  labs(x = "Block Transition",
+       y = "Pairwise Similarity",
+       title = "Similarity of Shape Descriptions",
+       subtitle = "In Consecutive Blocks",
+      color = "Subshape Competitor",
+       fill = "Subshape Competitor") + 
+  scale_color_manual(values = unlist(color_map)) + 
+  scale_fill_manual(values = color_map) + 
+  ylim(.45, .9) + 
+  guides(color=guide_legend(title.position="top"),
+         fill=guide_legend(title.position="top")) +
+  theme_jmank_talk(base_size = 8) +
+    theme(legend.position = "bottom", 
+        legend.direction = "horizontal",
+        legend.justification = "left")
+
+p_sim_trans_final
+
+reveal_save(reveal_layers(p_sim_trans_final), "sim_trans.png", width = 4, height = 2.5, path = talk_write_path)
+```
+
+```{r}
+p_sim_blocks_final <- p_sim_blocks +
+  labs(x = "Block",
+       y = "Mean Pairwise Similarity",
+       title = "Pairwise Similarity of Shape Descriptions",
+       subtitle = "Between Shapes in the Same Block",
+      color = "Subshape Competitor",
+       fill = "Subshape Competitor") + 
+  scale_color_manual(values = unlist(color_map)) + 
+  scale_fill_manual(values = unlist(color_map)) + 
+  ylim(0.15, 0.6) +
+  guides(color=guide_legend(title.position="top"),
+         fill=guide_legend(title.position="top")) +
+  theme_jmank_talk(base_size = 8) +
+    theme(legend.position = "bottom", 
+        legend.direction = "horizontal",
+        legend.justification = "left")
+
+p_sim_blocks_final
+
+reveal_save(reveal_layers(p_sim_blocks_final), "sim_within_block.png", width = 4, height = 2.5, path = talk_write_path)
+
+```
+
+```{r}
+p_sim_diffs_final <- p_sim_diffs +
+  theme_minimal() + 
+  scale_color_manual(values = unlist(color_map)) + 
+  scale_fill_manual(values = unlist(color_map)) + 
+  labs(x = "Block Number",
+       y = "Component similarity difference",
+       title = "Selective component reference",
+       color = "Condition",
+       fill = "Condition",
+       shape = "Condition") +
+  theme(legend.position = "bottom") + 
+  theme_jmank_talk(base_size = 8)
+
+p_sim_diffs_final
+reveal_save(reveal_aes(p_sim_diffs_final), "sim_diffs.png", width = 4, height = 2.5, path = talk_write_path)
+```
+
+
+
+```{r}
+View(d_chat_similarity_full |> 
+   # chats for the same target
+  filter(target1 == target2) |>  #same game
+    rowwise() |> 
+    mutate(rep_trans = paste(min(repNum1+1, repNum2+1), 
+                             max(repNum1+1, repNum2+1), sep = "->")) |> 
+    ungroup() |> 
+    filter(rep_trans %in% c("0->1", "1->2","2->3", "3->4")) |> 
+  mutate(rep_trans = factor(rep_trans, 
+                           levels = c("0->1", "1->2", "2->3", "3->4"))))
+
+
+View(d_chat_similarity_full |> 
+  filter(repNum1 == repNum2))
+```
+

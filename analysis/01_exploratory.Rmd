@@ -1,0 +1,467 @@
+
+```{r}
+library(tidyverse)
+library(here)
+library(ggreveal)
+
+target_experiment_names <-  c("run_v3/0", "run_v3/1")
+```
+
+```{r}
+
+load_data <- function(data_name, study_list) {
+  source_files <- list.files(path = here('data/processed_data/'),
+             recursive = TRUE,
+            pattern = paste0(data_name, ".csv$"),
+             full.names = TRUE)
+  data_files <- source_files[Reduce("|", lapply(study_list, function(x) grepl(x, source_files)))]
+  do.call(rbind, lapply(data_files, read.csv))
+}
+
+d_game <- load_data("games", target_experiment_names)
+d_round <- load_data("rounds", target_experiment_names)
+d_chat <- load_data("chats", target_experiment_names)
+d_players <- load_data("players", target_experiment_names)
+d_chat_similarity <- read_csv(here('data/processed_data/chat_pairwise_similarities.csv'))
+```
+
+# Descriptive game counts
+
+Add facet labels
+
+```{r}
+d_game$contextStructure_f <- factor(d_game$contextStructure, levels=c('comp-within','noncomp','comp-between'),
+  labels=c('Comp Within','No Comp','Comp Between'))
+
+```
+
+
+```{r}
+# how many complete games do I have?
+
+complete_rounds <- d_round |> 
+  left_join(d_game) |> 
+  group_by(gameID, repNum, contextStructure_f) |> 
+  summarize(n_responses = sum(!is.na(response))) |> 
+  filter(n_responses > 12) # 75 of trials have a response
+
+complete_rounds |> group_by(contextStructure_f) |> summarise(n_games = n_distinct(gameID))
+```
+
+## of correct responses overall
+
+```{r}
+d_round |> left_join(d_game) |> 
+  group_by(gameID, contextStructure_f) |> 
+  summarize(n_correct = sum(correct)) |> 
+  ggplot(aes(x = contextStructure_f, y = n_correct)) + 
+  geom_point(aes(color = contextStructure_f)) + 
+  theme_minimal() + ylim(0, 64) +
+  labs(y = "Num. Correct Responses")
+
+
+# proportion of correct responses by game type
+d_round |> left_join(d_game) |> 
+  filter(!is.na(response)) |> 
+  ggplot(aes(x = index, y = correct, color = contextStructure_f)) + 
+  geom_point(alpha = .5) + theme_minimal() + 
+  labs(x = "Round Num.", y = "Response Correct")
+
+p_points <- d_round |> left_join(d_game) |> 
+  filter(!is.na(response)) |> 
+  group_by(index, contextStructure_f) |> 
+  summarize(n_games = n_distinct(gameID),
+            n_correct = sum(correct),
+            prop_correct = n_correct/n_games) |> 
+  ggplot(aes(x = index, y = prop_correct, color = contextStructure_f)) + 
+    geom_vline(xintercept = c(16, 32, 48), linetype = "dashed") +
+  geom_point(alpha = .75) + 
+  theme_minimal() + 
+  geom_smooth() +
+  labs(x = "Round Num.", y = "Proportion of Correct Responses", color = "Context Structure") 
+
+p_points_list <- reveal_aes(p_points)
+p_points_list
+
+```
+
+Lets count some words!
+
+```{r}
+d_chat |> left_join(d_round) |> left_join(d_game) |> arrange(gameID, index)
+
+d_chat_word_counts <- d_chat %>% 
+  full_join(d_round) |> 
+  left_join(d_game) |> 
+ # filter(!is.chitchat) %>% 
+  mutate(text = gsub('[[:punct:] ]+',' ',text),
+         text = str_squish(text),
+         utt_length_chars = str_length(text), 
+         utt_length_words = str_count(text, "\\W+") + 1) %>% 
+  group_by(gameID, index, repNum, playerID, contextStructure_f) %>%
+  summarize(text = paste0(text, collapse = ', '),
+            total_num_words = sum(utt_length_words),
+            total_num_chars = sum(utt_length_chars))
+
+d_chat_word_counts |> 
+  ggplot(aes(x = index, y = total_num_words, color = contextStructure_f)) +
+  geom_point(alpha = .15) + theme_minimal() +
+  geom_point(data = d_chat_word_counts |> 
+               group_by(index, contextStructure_f) |> 
+               summarize(mean_n_words = mean(total_num_words, na.rm = T)),
+             aes(y = mean_n_words),
+             alpha = .75)
+
+p_wordcount <- d_chat_word_counts |> 
+  ggplot(aes(x = index, y = total_num_words, color = contextStructure_f)) +
+    labs(x = "Trial Num.",
+       y = "Num. Words",
+       color = "Context Structure") +
+  theme(legend.position = "bottom") +
+  theme_minimal() +
+  geom_point(alpha = .15) +
+  geom_smooth()
+
+  
+p_wordcount_list <- reveal_aes(p_wordcount)
+p_wordcount_list
+
+#reveal_save(p_wordcount_list, "wordcount.png", width = 8, height = 4, path = "~/Projects/comp-cog/comp-shapes-comm/analysis/demo_v1/figs/wordcount")
+```
+
+```{r}
+library(lme4)
+library(lmerTest)
+```
+
+
+```{r}
+d_chat_word_counts$contextStructure_f <- relevel(d_chat_word_counts$contextStructure_f, ref = "No Comp")
+
+d_chat_word_counts <- d_chat_word_counts %>%
+  ungroup() %>% 
+  mutate(
+    # Center around mean and divide by SD, but only for non-NA values
+    index_scaled = (index - mean(index, na.rm = TRUE)) / sd(index, na.rm = TRUE),
+    index_squared = ((index^2) - mean(index^2, na.rm = TRUE)) / sd(index^2, na.rm = TRUE)
+  )
+
+word_count_model <- lmer(total_num_words ~ 
+                        index_scaled * contextStructure_f +  # interaction term
+                        index_squared + 
+                        (1 + index_scaled | gameID),           
+                        data = d_chat_word_counts)
+```
+
+```{r}
+summary(word_count_model)
+```
+
+
+```{r}
+full_data <- d_chat_word_counts |> left_join(d_round) |> left_join(d_game)
+```
+
+## Similarity measures
+
+```{r}
+director_df <- d_chat |> distinct(roundID, playerID, director)
+
+d_chat_similarity_full <- d_chat_similarity |> 
+  left_join(d_round |> select("roundID1"="roundID","target1"="target", "gameID1" = "gameID")) |> 
+  left_join(d_round |> select("roundID2"="roundID","target2"="target", "gameID2" = "gameID")) |> 
+  left_join(d_game |> select("gameID1" = "gameID", "contextStructure_f1" = "contextStructure_f")) |> 
+  left_join(d_game |> select("gameID2" = "gameID", "contextStructure_f2" = "contextStructure_f")) |> 
+  left_join(director_df |> select("roundID1" = "roundID", "playerID1" = "playerID", "director1" = "director")) |> 
+  left_join(director_df |> select("roundID2" = "roundID", "playerID2" = "playerID", "director2" = "director"))
+```
+First, how does similarity (for the same shape) change over the blocks
+
+```{r}
+sim_by_game_tangram <- d_chat_similarity_full |> 
+  filter(target1 == "/tangrams/0_16.png",
+         gameID1 %in% c("01J1GBK26D21DVATKGAY8P4SJK", "01J1QNE6KNDHKGTDVN9A5ABN3E", "01J1QNE39Q81W3DCXXJZ95X0QX")) %>% 
+  # chats for the same target
+  filter(target1 == target2,
+         gameID1 == gameID2,
+         director1 == "t",# director messages only
+         director2 == "t") |>  #same game
+    rowwise() |> 
+    mutate(rep_trans = paste(min(repNum1, repNum2), max(repNum1, repNum2), sep = "_")) |> 
+    ungroup() |> 
+    filter(rep_trans %in% c("0_1", "1_2","2_3", "3_4")) |> 
+  group_by(gameID1, rep_trans, target1, contextStructure_f1) |> 
+  summarize(mean_sim = mean(value, rm.na = T),
+            sd_sim = sd(value))
+
+sim_by_game <- sim_by_game_tangram |> 
+  group_by(gameID1, rep_trans, contextStructure_f1) |> 
+  summarize(mean_sim = mean(mean_sim, rm.na = T),
+            sd_sim = sd(mean_sim))
+
+sim_across_game <- sim_by_game |> 
+  group_by(rep_trans, contextStructure_f1) |> 
+  summarize(mean_sim = mean(mean_sim, rm.na = T),
+            sd_sim = sd(mean_sim))
+
+p_sim_tangram <- sim_across_game |> 
+  ggplot(aes(x = rep_trans, y = mean_sim, color = contextStructure_f1, group = contextStructure_f1)) +
+  ylim(0, 1) + 
+  #geom_jitter(alpha = .75, position = position_dodge(width = .25)) +
+  #geom_line(data = sim_by_game, aes(group = gameID1), alpha = .25) +
+  #geom_line(size = 1) +
+  geom_point(size = 1.5) +
+  theme_minimal() +
+  labs(x = "Block Transition", y = "Mean Similarity", color = "Context Structure",
+       title = "Conventions for individual tangrams become more stable over time")
+
+
+p_sim_list <- reveal_groups(p_sim_tangram)
+p_sim_list
+
+reveal_save(p_sim_list, "sim_tangram.png", width = 6, height = 4, path = "~/Projects/comp-cog/comp-shapes-comm/analysis/demo_v1/figs/simtangram-0-16")
+
+```
+
+
+```{r}
+sim_by_game_tangram <- d_chat_similarity_full |> 
+  # chats for the same target
+  filter(target1 == target2,
+         gameID1 == gameID2,
+         director1 == "t",# director messages only
+         director2 == "t") |>  #same game
+    rowwise() |> 
+    mutate(rep_trans = paste(min(repNum1, repNum2), max(repNum1, repNum2), sep = "_")) |> 
+    ungroup() |> 
+    filter(rep_trans %in% c("0_1", "1_2","2_3", "3_4")) |> 
+  group_by(gameID1, rep_trans, target1, contextStructure_f1) |> 
+  summarize(mean_sim = mean(value, rm.na = T),
+            sd_sim = sd(value))
+
+sim_by_game <- sim_by_game_tangram |> 
+  group_by(gameID1, rep_trans, contextStructure_f1) |> 
+  summarize(mean_sim = mean(mean_sim, rm.na = T),
+            sd_sim = sd(mean_sim))
+
+sim_across_game <- sim_by_game |> 
+  group_by(rep_trans, contextStructure_f1) |> 
+  summarize(mean_sim = mean(mean_sim, rm.na = T),
+            sd_sim = sd(mean_sim))
+
+p_sim_tangram <- sim_by_game_tangram |> 
+  ggplot(aes(x = rep_trans, y = mean_sim, color = contextStructure_f1)) +
+  geom_jitter(alpha = .1, position = position_dodge(width = .25)) +
+  geom_line(data = sim_by_game, aes(group = gameID1), alpha = .25) +
+  geom_line(data = sim_across_game, aes(group = contextStructure_f1), size = 1) +
+  geom_point(data = sim_across_game, size = 1.5) +
+  theme_minimal() +
+  labs(x = "Block Transition", y = "Mean Similarity", color = "Context Structure",
+       title = "Conventions for individual tangrams become more stable over time")
+
+
+p_sim_list <- reveal_layers(p_sim_tangram)
+p_sim_list
+
+reveal_save(p_sim_list, "sim_tangram.png", width = 8, height = 4, path = "~/Projects/comp-cog/comp-shapes-comm/analysis/demo_v1/figs/simtangram")
+
+#ggsave("sim_over_block_same_tangram.png", width = 7, height = 3)
+
+```
+
+Average pairwise cosine similarity between all tangrams within a block 
+
+```{r}
+average_sim_within_round <- d_chat_similarity_full |> 
+  filter(gameID1 == gameID2,
+         repNum1 == repNum2,
+         director1 == "t",# director messages only
+         director2 == "t") |> 
+  group_by(gameID1, contextStructure_f1, repNum1) |> 
+  summarize(n = n(),
+            mean_sim = mean(value))
+
+average_sim_within_round_across_game <- average_sim_within_round |> 
+  group_by(contextStructure_f1, repNum1) |> 
+  summarize(n = n(),
+            mean_sim = mean(mean_sim))
+
+sim_block <- average_sim_within_round |> 
+  ggplot(aes(x = repNum1, y = mean_sim, color = contextStructure_f1)) + 
+  geom_point(alpha = .25) +
+  geom_line(data = average_sim_within_round_across_game, 
+            aes(group = contextStructure_f1), size = 1)  +
+  theme_minimal() +
+  labs(x = "Block",
+       y = "Mean Pairwise Similarity",
+       title = "Pairwise similarity between tangrams in a block",
+       color = "Context Structure")
+
+sim_block_list <- reveal_groups(sim_block)
+sim_block_list
+
+reveal_save(sim_block_list, "sim_block.png", width = 6, height = 4, path = "~/Projects/comp-cog/comp-shapes-comm/analysis/demo_v1/figs/simblock")
+```
+
+Filtered to just the shapes that appear multiple times in all 3 conditions
+
+```{r}
+average_sim_within_round <- d_chat_similarity_full |> 
+  filter(gameID1 == gameID2,
+         repNum1 == repNum2,
+         director1 == "t",# director messages only
+         director2 == "t",
+         target1 %in% repeated_tangrams,
+         target2 %in% repeated_tangrams) |> 
+  group_by(gameID1, contextStructure_f1, repNum1) |> 
+  summarize(n = n(),
+            mean_sim = mean(value))
+
+average_sim_within_round_across_game <- average_sim_within_round |> 
+  group_by(contextStructure_f1, repNum1) |> 
+  summarize(n = n(),
+            mean_sim = mean(mean_sim))
+
+average_sim_within_round |> 
+  ggplot(aes(x = repNum1, y = mean_sim, color = contextStructure_f1)) + 
+  geom_point(alpha = .25) +
+  geom_line(data = average_sim_within_round_across_game, 
+            aes(group = contextStructure_f1), size = 1)  +
+  theme_minimal() +
+  labs(x = "Block",
+       y = "Mean Pairwise Similarity",
+       title = "Pairwise similarity between tangrams in a block",
+       color = "Context Structure")
+```
+
+
+
+Similarity for top vs bottom shapes 
+
+```{r}
+d_chat_similarity_full |> 
+  filter(contextStructure1 == contextStructure2,
+         gameID1 == gameID2) |> 
+  group_by(gameID1, contextStructure2) |> 
+  summarize(mean_sim = mean(value)) |> 
+  ggplot(aes(x= contextStructure2, y = mean_sim, color = contextStructure2)) + 
+  geom_jitter(width = .05) + 
+  theme_minimal() + 
+  labs()
+```
+
+```{r}
+d_chat_similarity_full <- d_chat_similarity_full |> 
+  mutate(top1 = str_extract(target1, "(?<=/)[^/]+(?=_)"),
+         top2 = str_extract(target2, "(?<=/)[^/]+(?=_)"),
+         bottom1 = str_extract(target1, "(?<=_)[^_]+(?=\\.png)"),
+         bottom2 = str_extract(target2, "(?<=_)[^_]+(?=\\.png)"))
+```
+
+```{r}
+sim_by_subshape <- d_chat_similarity_full |> 
+  filter(gameID1 == gameID2,
+         target1 != target2) |> 
+  mutate(match = case_when(top1 == top2 ~ "top-match",
+                           bottom1 == bottom2 ~ "bottom-match",
+                           TRUE ~ "non-match")) |> 
+  group_by(gameID1, match, contextStructure_f1) |> 
+  summarise(mean_sim = mean(value))
+
+sim_by_subshape$match_factor = factor(sim_by_subshape$match, levels=c("top-match", "bottom-match", "non-match"))
+
+sim_by_subshape |> 
+  ggplot(aes(y = mean_sim, x = match_factor, 
+             #color = contextStructure1,
+             fill = contextStructure_f1, 
+             group = contextStructure_f1)) +
+geom_bar(stat = "summary", position = "dodge")+
+geom_point(position = position_dodge(width = .8), alpha = .25) + 
+  theme_minimal() +
+  labs(x = "Subshape Relationship",
+       y = "Mean Similarity",
+       title = "Participants are More Likely to Conventionalize Top Shapes",
+       fill = "Context Structure")
+```
+
+
+```{r}
+sim_by_subshape <- d_chat_similarity_full |> 
+  filter(gameID1 == gameID2,
+         target1 != target2) |> 
+  mutate(match = case_when(top1 == top2 ~ "top-match",
+                           bottom1 == bottom2 ~ "bottom-match",
+                           TRUE ~ "non-match")) |> 
+  group_by(gameID1, match, contextStructure_f1) |> 
+  summarise(mean_sim = mean(value))
+
+sim_by_subshape$match_factor = factor(sim_by_subshape$match, levels=c("top-match", "bottom-match", "non-match"))
+
+subshape_over_round_game <- d_chat_similarity_full |> 
+  filter(gameID1 == gameID2,
+         repNum1 ==repNum2,
+         target1 != target2) |> 
+  mutate(match = case_when(top1 == top2 ~ "top-match",
+                           bottom1 == bottom2 ~ "bottom-match",
+                           TRUE ~ "non-match")) |> 
+  group_by(gameID1, match, repNum1, contextStructure_f1) |> 
+  summarise(mean_sim = mean(value))
+
+subshape_over_round_game$match_factor = factor(subshape_over_round_game$match, levels=c("top-match", "bottom-match", "non-match"))
+
+
+subshape_over_round <- subshape_over_round_game |> 
+  group_by(match_factor, repNum1, contextStructure_f1) |> 
+  summarise(mean_sim = mean(mean_sim))
+
+
+subshape_over_round_game |> 
+  ggplot(aes(y = mean_sim, x = match_factor, 
+             #color = contextStructure1,
+             fill = contextStructure_f1, 
+             group = contextStructure_f1)) +
+  facet_wrap(~repNum1) +
+geom_bar(stat = "summary", position = "dodge")+
+geom_point(position = position_dodge(width = .8), alpha = .25) + 
+  theme_minimal() +
+  labs(x = "Subshape Relationship",
+       y = "Mean Similarity",
+       title = "Utterances are more structured in the compositional contexts",
+       fill = "Context Structure")
+
+subshape_over_round_game |> 
+  ggplot(aes(y = mean_sim, x = repNum1, 
+             color = match_factor,
+             #fill = contextStructure1, 
+             group = match_factor)) + 
+  facet_wrap(~contextStructure_f1) + 
+  geom_line(data = subshape_over_round, aes(color = match_factor), size = 1)+
+geom_point(position = position_dodge(width = .8), alpha = .25) + 
+  theme_minimal() +
+  labs(x = "Block Number",
+       y = "Average Pairwise Similarity",
+       color = "Shared Subshapes",
+       title = "Utterances are most structured in the comp-within condition",
+       subtitle = "And top shapes are more consistant")
+
+
+subshape <- subshape_over_round_game |> 
+  ggplot(aes(y = mean_sim, x = repNum1, 
+             color = contextStructure_f1,
+             #fill = contextStructure1, 
+             group = contextStructure_f1)) + 
+  facet_wrap(~match_factor) + 
+  geom_line(data = subshape_over_round, aes(color = contextStructure_f1), size = 1)+
+geom_point(position = position_dodge(width = .8), alpha = .25) + 
+  theme_minimal() +
+  labs(x = "Block Number",
+       y = "Average Pairwise Similarity",
+       color = "Context Structure",
+       title = "Top shapes are more consistant")
+
+subshape_list <- reveal_panels(subshape)
+subshape_list
+
+reveal_save(subshape_list, "subshape.png", width = 5, height = 4, path = "~/Projects/comp-cog/comp-shapes-comm/analysis/demo_v1/figs/subshape")
+```
+

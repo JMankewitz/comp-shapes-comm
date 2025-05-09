@@ -1,0 +1,166 @@
+```{r}
+library(tidyverse)
+library(lmerTest)
+library(here)
+library(broom.mixed)
+library(tidyboot)
+
+color_map <- list('Within Trial' = "#85216BFF",'No Competitor' = "#FCAD12FF", 'Across Trial' = "#CB4149FF")
+
+fig_write_path <- here("analysis/figures")
+
+game_blacklist <- c("01JGZ1J4WKTCRGQS8R8214JJH2",#AI response
+                   "01JGMPEGCD0EX4TXSSNEY3A670" #AI response
+                   )
+
+final_game_set <- "run_v3"
+
+target_experiment_names <- list.files(here("data", "processed_data", final_game_set))
+
+# condition names
+
+old_conditions <- c('noncomp','comp-within','comp-between')
+new_conditions_long <- c('No Competitor','Within Trial','Across Trial')
+new_conditions_short <- c('No Comp','Comp Within','Comp Between')
+```
+
+```{r}
+load_data <- function(data_name, study_list) {
+  source_files <- list.files(path = here("data", "processed_data", final_game_set),
+             recursive = TRUE,
+            pattern = paste0(data_name, ".csv$"),
+             full.names = TRUE)
+  
+  mod_read_csv <- function(data_file, data_name){
+    read.csv(data_file)
+  }
+  
+  data_files <- source_files[Reduce("|", lapply(study_list, function(x) grepl(x, source_files)))]
+  do.call(bind_rows, lapply(data_files, mod_read_csv))
+}
+
+load_annotation_data <- function(data_name) {
+  source_files <- list.files(path = here("data", "processed_data", "annotation_data"),
+             recursive = TRUE,
+            pattern = ".csv$",
+             full.names = TRUE)
+  
+    do.call(bind_rows, lapply(source_files, read.csv))
+}
+
+d_game <- load_data("games", target_experiment_names)
+d_round <- load_data("rounds", target_experiment_names)
+d_chat <- load_data("chats", target_experiment_names)
+d_players <- load_data("players", target_experiment_names)
+d_chat_similarity <- read_csv(here('data/processed_data/message_similarities.csv'))
+d_annotations <- load_annotation_data()
+
+d_annotations_full <- d_annotations |> 
+  left_join(d_round, by = "roundID") |> 
+  left_join(d_game) |> 
+  mutate(annotation_collapsed = case_when(annotation == "top" | annotation == "bottom" ~ "top or bottom alone", 
+                                          annotation == "top_bottom" ~ "top and bottom", 
+                                          annotation == "holistic" ~ annotation, 
+                                          TRUE ~ annotation))
+
+
+d_annotations_by_game_counts <- d_annotations_full |>
+  filter(annotation_collapsed != "idk") |>
+  group_by(gameID, annotation_collapsed) |> 
+  summarize(annotation_n = n(), .groups = "drop")
+
+d_annotations_by_game <- expand.grid(gameID = unique(d_annotations_by_game_counts$gameID), 
+            annotation_collapsed = unique(d_annotations_by_game_counts$annotation_collapsed)) |> 
+  left_join(d_annotations_by_game_counts) |> 
+  mutate(annotation_n = if_else(is.na(annotation_n), 0, annotation_n)) |> 
+  left_join(d_game |> select(gameID, contextStructure)) |> 
+  group_by(gameID, contextStructure) |> 
+  mutate(total = sum(annotation_n),
+         annotation_prop = annotation_n / total)
+
+d_annotations_overall<- d_annotations_full |> 
+  filter(annotation_collapsed != "idk") |>
+  group_by(contextStructure,  annotation_collapsed) |> 
+  summarize(annotation_n = n(), .groups = "drop") |> 
+  group_by(contextStructure) |> 
+  mutate(total = sum(annotation_n),
+         annotation_prop = annotation_n / total)
+
+  d_annotations_overall |> 
+    ggplot(aes(x = annotation_collapsed, y = annotation_prop, fill = annotation_collapsed)) +
+  geom_bar(stat = "identity", width = 0.9) +
+    geom_jitter(data = d_annotations_by_game, width = .05, height = .01, alpha = .5) + 
+  facet_wrap(~contextStructure) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Annotation Type",
+    y = "Overall Proportion",
+    title = "Annotation Proportions by Context Structure",
+    fill = "Annotation"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1),
+    legend.position = "none",
+    panel.grid.major.x = element_blank()
+  )
+```
+In-text description: 
+
+A small sample (10%) of the final descriptions from games in each condition were coarsely annotation by the first author to explore whether this difference in similarity measure accurately captures the strategies used by dyads in this task. We found that XX% of final-round descriptions from the across-trial condition described either a top component or bottom component alone while XX% of descriptions in the within-trial condition used both a descriptin of the top shape and a description of the bottom shape. In the non-compositional baseline condition, however, participants used holistic descriptions XX% of the time, both top and bottom descriptions XX% of the time, and isolated top or bottom descriptions XX% of the time.
+
+
+```{r}
+ggplot(d_annotations_by_game_clean, 
+       aes(x = annotation_collapsed, y = annotation_prop, fill = annotation_collapsed)) +
+  geom_bar(stat = "identity", width = 0.9) +
+  facet_wrap(~facet_label, ncol = 5) +  # adjust `ncol` as needed
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Annotation Type",
+    y = "Proportion",
+    title = "Annotation Proportions by Game and Context Structure",
+    fill = "Annotation"
+  ) +
+  theme_minimal(base_size = 9) +
+  theme(
+    strip.text = element_text(size = 7),  # shrink facet labels
+    axis.text.x = element_text(angle = 30, hjust = 1, size = 7),
+    legend.position = "none",
+    panel.grid.major.x = element_blank()
+  )
+```
+
+```{r}
+d_annotations_by_game_clean <- d_annotations_by_game |> 
+  filter(!is.na(annotation_prop)) |> 
+  mutate(
+    facet_label = paste0("Game ", gameID, "\n", contextStructure),
+    # Sort by contextStructure first, then gameID
+    facet_label = factor(facet_label, levels = d_annotations_by_game |> 
+      distinct(gameID, contextStructure) |>
+      arrange(contextStructure, gameID) |>
+      mutate(label = paste0("Game ", gameID, "\n", contextStructure)) |>
+      pull(label))
+  )
+
+ggplot(d_annotations_by_game_clean, 
+       aes(x = annotation_collapsed, y = annotation_prop, fill = annotation_collapsed)) +
+  geom_bar(stat = "identity", width = 0.9) +
+  facet_wrap(~facet_label, ncol = 9) +  # adjust ncol based on number of columns desired
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Annotation Type",
+    y = "Proportion",
+    title = "Annotation Proportions by Game (Sorted by Context Structure)",
+    fill = "Annotation"
+  ) +
+  theme_minimal(base_size = 9) +
+  theme(
+    strip.text = element_text(size = 7),
+    axis.text.x = element_text(angle = 30, hjust = 1, size = 7),
+    legend.position = "none",
+    panel.grid.major.x = element_blank()
+  )
+```
+
