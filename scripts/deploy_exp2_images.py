@@ -35,7 +35,7 @@ from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-EXP = REPO / "experiments" / "compositional-tangrams"
+EXP = REPO / "experiments" / "compositional-tangrams-v2"
 
 COMP_SETS = EXP / "server" / "src" / "exp2_comp_sets.json"
 NONCOMP_SETS = EXP / "server" / "src" / "exp2_noncomp_sets.json"
