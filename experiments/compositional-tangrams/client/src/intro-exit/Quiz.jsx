@@ -110,7 +110,7 @@ export function Quiz({ next }) {
     is the target. The task of the director is to tell the matcher
     which one of the objects is the target. The matcher in turn needs
     to select the right object based on this information. You'll both
-    get <b> a bonus of $0.01 for each correct response</b>, so pay
+    get <b> a bonus of $0.03 for each correct response</b>, so pay
     attention! Remember that it doesn't make sense to describe the
     location of the target object, since the order of the images is
     different for the director and the matcher.

@@ -21,9 +21,13 @@ export function Tangram(props) {
       return;
     }
 
-    if (round.get("selection") !== '' && round.get("selection") !==tangram){
-      console.warn("Player already made selection", {attempted_selection: tangram, 
-        selected: round.get("selection")});
+    // Falsy test, not `!== ''`. `selection` is initialised at game creation, but
+    // if it is ever absent this reads `undefined`, and a strict comparison would
+    // silently swallow every click. See design doc S6.7.
+    const current = round.get("selection");
+    if (current && current !== tangram) {
+      console.warn("Player already made selection", {attempted_selection: tangram,
+        selected: current});
       return; //prevent multiple clicks
     }
 
@@ -36,12 +40,24 @@ export function Tangram(props) {
       );
     });
 
-    if (
-      stage.get("name") === "selection" &&
-      speakerMsgs.length > 0 &&
-      (round.get("selection") === "" || round.get("selection") === tangram) &&
-      player.get("role") === "matcher"
-    ) {
+    if (player.get("role") !== "matcher") return;
+
+    // Deliberate gate: the matcher may not choose until the director has said
+    // something (S4.3 rationale -- prevents guessing before a description). But
+    // the failure was silent and looked identical to a frozen page, which is
+    // what participants reported. Surface it instead.
+    if (speakerMsgs.length === 0) {
+      round.set("clickBlockedAt", Date.now());
+      return;
+    }
+
+    if (stage.get("name") === "selection" && (!current || current === tangram)) {
+      // ITEM 7 (S6.6): client-side selection timestamp. Round start/end alone
+      // cannot separate matcher-decide from transition from lag, and without
+      // this there is no way to distinguish "clicked and waited" from "never
+      // clicked" -- the ambiguity behind the 2.93% of rounds that recorded a
+      // response yet still ran to the stage cap.
+      round.set("selectionMadeAt", Date.now());
       round.set("selection", tangram);
       player.stage.set("submit", true);
       partner.stage.set("submit", true);
@@ -59,7 +75,7 @@ export function Tangram(props) {
     if (stage.get("name") === "selection") {
       if (
         player.get("role") === "director" &&
-        round.get("selection") === "" &&
+        !round.get("selection") &&
         tangram === target
       ) {
         return "#000"; // Black for target selection highlight

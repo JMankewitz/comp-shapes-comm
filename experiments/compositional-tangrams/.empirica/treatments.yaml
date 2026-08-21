@@ -40,6 +40,16 @@ factors:
         - value: 4
         - value: 2
         - value: 1
+    - name: describeSecondsPerItem
+      desc: >-
+        Exp 2 only. Safety cap for the free-description stages, in seconds per
+        item; the stage duration is numItems x this. Both partners normally
+        submit long before it fires. Drives the pre/post phases off item count,
+        which is 20 for comp but only 8 for the noncomp pre-test (S4.6).
+      values:
+        - value: 45
+        - value: 20
+        - value: 10
 treatments:
     - name: demo-comp-between
       factors:
@@ -109,6 +119,72 @@ treatments:
         feedbackDuration: 1
         maxTimeout: 2
         numRepetitionsWithPartner: 2
+        playerCount: 2
+        selectionDuration: 30
+        showNegativeFeedback: 1
+    - name: exp2-comp-within
+      desc: >-
+        Exp 2 full: 20-item pre-test, 48 training trials (12 shapes x 4 blocks),
+        20-item post-test. Blocks are 12 trials, not 16 -- the training set is
+        the 4x4 crossing minus the held-out diagonal.
+      factors:
+        contextSize: 4
+        contextStructure: comp-within
+        describeSecondsPerItem: 45
+        feedbackDuration: 3
+        maxTimeout: 5
+        numRepetitionsWithPartner: 4
+        playerCount: 2
+        selectionDuration: 60
+        showNegativeFeedback: 1
+    - name: exp2-comp-between
+      desc: Exp 2 full, across-trial. ~3 legal displays/target by design (S4.2).
+      factors:
+        contextSize: 4
+        contextStructure: comp-between
+        describeSecondsPerItem: 45
+        feedbackDuration: 3
+        maxTimeout: 5
+        numRepetitionsWithPartner: 4
+        playerCount: 2
+        selectionDuration: 60
+        showNegativeFeedback: 1
+    - name: exp2-noncomp
+      desc: >-
+        Exp 2 full, non-compositional. Pre-test is 8 items, not 20 -- it must be
+        component-disjoint or it demonstrates that shapes decompose (S4.6).
+        Post-test is the same 20 images as the paired comp set.
+      factors:
+        contextSize: 4
+        contextStructure: noncomp
+        describeSecondsPerItem: 45
+        feedbackDuration: 3
+        maxTimeout: 5
+        numRepetitionsWithPartner: 4
+        playerCount: 2
+        selectionDuration: 60
+        showNegativeFeedback: 1
+    - name: exp2-test-comp-within
+      desc: Fast two-browser walkthrough of the whole Exp 2 flow. 1 block, short caps.
+      factors:
+        contextSize: 4
+        contextStructure: comp-within
+        describeSecondsPerItem: 10
+        feedbackDuration: 1
+        maxTimeout: 5
+        numRepetitionsWithPartner: 1
+        playerCount: 2
+        selectionDuration: 30
+        showNegativeFeedback: 1
+    - name: exp2-test-noncomp
+      desc: Fast walkthrough of the noncomp flow, incl. the 8-item pre-test.
+      factors:
+        contextSize: 4
+        contextStructure: noncomp
+        describeSecondsPerItem: 10
+        feedbackDuration: 1
+        maxTimeout: 5
+        numRepetitionsWithPartner: 1
         playerCount: 2
         selectionDuration: 30
         showNegativeFeedback: 1

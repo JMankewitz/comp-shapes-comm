@@ -22,6 +22,24 @@ export function Introduction({ next }) {
       </p>
       <br></br>
 
+      {/* Exp 2: participants now do a solo description phase before and after the
+          game. Without this they are dropped into 20 free-text trials with no
+          warning. WORDING NEEDS REVIEW before the pilot runs. */}
+      <p>
+    This study has <b>three parts</b>. In <b>Part 1</b> you will see a series of
+    shapes one at a time and type a short description of each one, on your own.
+    In <b>Part 2</b> you will play the matching game described below with a
+    partner. In <b>Part 3</b> you will describe a set of shapes on your own
+    again, the same way you did in Part 1.
+      </p>
+      <br></br>
+      <p>
+    In Parts 1 and 3 there is no partner and no score &mdash; just type how you
+    would describe each shape so that another person could pick it out. Your
+    bonus comes from Part 2.
+      </p>
+      <br></br>
+
       <p>
     On each round, one of you will be assigned the <b> Director </b> role and the
     other will be the <b> Matcher</b>. On each round, the director is
@@ -30,7 +48,7 @@ export function Introduction({ next }) {
     is the target. The task of the director is to tell the matcher
     which one of the objects is the target. The matcher in turn needs
     to select the right object based on this information. You'll both
-    get <b> a bonus of $0.01 for each correct response</b>, so pay
+    get <b> a bonus of $0.03 for each correct response</b>, so pay
     attention! Remember that it doesn't make sense to describe the
     location of the target object, since the order of the images is
     different for the director and the matcher.

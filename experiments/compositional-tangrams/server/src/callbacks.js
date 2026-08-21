@@ -3,6 +3,28 @@ import { ClassicListenersCollector } from "@empirica/core/admin/classic";
 export const Empirica = new ClassicListenersCollector();
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import {
+  loadSchedule,
+  loadSet,
+  assignSet,
+  withinTrialDisplays,
+  acrossTrialDisplays,
+  nonCompDisplay,
+  makeDisplayPicker,
+  imageURL,
+  withURLs,
+  addDescribeRound,
+  releaseSet,
+} from './exp2.js';
+
+// onGameStart/onGameEnded receive only `{ game }` -- no event context -- but the
+// cross-batch set tally lives in Empirica's global scope, which is reachable
+// only through a ctx. Capture one at boot and hold it for the process.
+let empiricaCtx = null;
+Empirica.on("start", (ctx) => {
+  empiricaCtx = ctx;
+  console.log("Exp 2: Empirica context captured; global set tally available");
+});
 
 const names = [
 "Repi",
@@ -44,39 +66,65 @@ const gameRotation = _.sample(possibleRotations)
 console.log("Game rotation set to:", gameRotation, "degrees for game", game.id);
 game.set("rotation", gameRotation);
 
-  let topTangrams, bottomTangrams, targetTangrams;
+  // Exp 2: the training set, the diagonal holdout and the pre/post item lists are
+  // all precomputed in exp2_{comp,noncomp}_sets.json. Read them; do not rebuild
+  // the matrix here.
+  const condition = game.get("contextStructure");
+  let selectedSet, assignment, schedule;
   try {
-    const jsonTangramPath = game.get("contextStructure") == "noncomp"
-      ? "noncomp_sets.json"  // Just the filename since it's in the same directory
-      : "comp_sets.json";
-        
-    const jsonContent = await fs.readFile(jsonTangramPath, 'utf8');
-      const allSets = JSON.parse(jsonContent);
-      const selectedSet = _.sample(allSets);
-      
-      topTangrams = selectedSet.top_tangrams;
-      bottomTangrams = selectedSet.bottom_tangrams;
-     targetTangrams = [];
-  
-      if (game.get("contextStructure") == "noncomp") {
-        for (let i = 0; i < topTangrams.length; i++){
-          targetTangrams.push([topTangrams[i], bottomTangrams[i]])
-        }
-      } else {
-        for (let i = 0; i < game.get("contextSize"); i++) {
-          for (let j = 0; j < game.get("contextSize"); j++) {  // Fixed j declaration
-            targetTangrams.push([topTangrams[i], bottomTangrams[j]])
-          }
-        }}
-        game.set("topTangrams", topTangrams)
-        game.set("bottomTangrams", bottomTangrams)
-        game.set('targets', targetTangrams)
+    schedule = await loadSchedule();
 
-      // Rest of your code remains the same...
-    } catch (error) {
-      console.error("Error loading tangram sets:", error);
-      throw error;
-    }
+    // assignSet claims a slot in the cross-batch global tally and writes it back
+    // in the same tick, so a concurrently starting game cannot read a stale count
+    // and land on the same set.
+    assignment = assignSet(game, schedule, empiricaCtx?.globals);
+    game.set("setId", assignment.setId);
+    game.set("setIndex", assignment.setIndex);
+    game.set("setReplicate", assignment.replicate);
+    game.set("setSlotInReplicate", assignment.slotInReplicate);
+
+    selectedSet = await loadSet(condition, assignment.setId);
+  } catch (error) {
+    console.error("Error loading Exp 2 stimulus sets:", error);
+    throw error;
+  }
+
+  game.set("stimulusSchemaVersion", "exp2-1");
+  // noncomp sets carry comp_set_id; it equals set_id for all 500, so all three
+  // conditions post-test on identical images. Recorded explicitly so the
+  // analysis never has to assume it.
+  game.set("compSetId", selectedSet.comp_set_id ?? selectedSet.set_id);
+  game.set("components", selectedSet.components);
+
+  console.log(
+    `Game ${game.id} (${condition}) -> set ${assignment.setId}, ` +
+    `replicate ${assignment.replicate}, slot ${assignment.slotInReplicate}. ` +
+    `Tally now ${JSON.stringify(assignment.tallyAfterClaim)}`
+  );
+
+  if (assignment.wrapped) {
+    console.log(
+      `Game ${game.id}: every scheduled set already has ` +
+      `${schedule.dyads_per_condition_per_set} ${condition} dyads; wrapping onto ` +
+      `set ${assignment.setId} as replicate ${assignment.replicate} ` +
+      `(${assignment.priorDyadsOnSet} prior dyads on this set)`
+    );
+  }
+
+  // The 12 trained shapes: {label, top, bottom, image}. For comp this is the 4x4
+  // crossing minus the diagonal; for noncomp it is 4 diagonal wholes + 8 fillers.
+  const targets = selectedSet.training_shapes;
+  game.set("targets", targets);
+  game.set("trainingLabels", targets.map((s) => s.label));
+
+  // Pre/post free-description items (S4.3-4.5). Comp sets carry 20 at each
+  // phase; NONCOMP CARRIES ONLY 8 AT PRE-TEST, deliberately (S4.6) -- the phase
+  // is driven off array length, never a literal 20.
+  const pretestItems = withURLs(selectedSet.pretest_items);
+  const posttestItems = withURLs(selectedSet.posttest_items);
+  game.set("numPretestItems", pretestItems.length);
+  game.set("numPosttestItems", posttestItems.length);
+
   // initialize players
   game.players.forEach((player, i) => {
     const otherPlayer = game.players.filter((p) => p.id != player.id);
@@ -89,68 +137,83 @@ game.set("rotation", gameRotation);
     player.set("role", i == 0 ? 'director' : 'matcher'); //first player is always speaker (if overfill there may be multiple listeners??)
     player.set("bonus", 0);
     player.set("score", 0);
+    // Each partner walks their own shuffled order so the two are not in lockstep
+    // and sequence effects do not align within a dyad. Per-item measures join on
+    // `image`, so partner alignment (DV5) is unaffected.
+    player.set("pretestItems", _.shuffle(pretestItems));
+    // Read by the post-test exit step, where the game scope is not reliable.
+    player.set("posttestItems", _.shuffle(posttestItems));
+    player.set("rotation", gameRotation);
+    player.set("pretestResponses", []);
+    player.set("posttestResponses", []);
   });
 
-  const targets = game.get('targets')
   const reps = treatment.numRepetitionsWithPartner;
-  const numTargets = targets.length;
-  const numPartners = game.players.length - 1;
-  const info = {
-    numTrialsPerBlock : numTargets,
-    numRepsPerPartner : reps,
-    numTrialsPerPartner: reps * numTargets
-  };
+  const numTargets = targets.length; // 12 under Exp 2, was 16
+  const displaySize = game.get("contextSize");
 
   // use this to play the sound on the UI when the game starts
   game.set("justStarted", true);
 
-  // Loop through repetition blocks
+  // Enumerate every legal display once per target, then draw one per block. The
+  // old code sampled competitors fresh each trial, which could land on a
+  // held-out diagonal cell now that the diagonal is gone.
+  const pickerFor = new Map();
+  for (const target of targets) {
+    if (condition === "noncomp") continue; // sampled per trial, see below
+    const legal = condition === "comp-within"
+      ? withinTrialDisplays(target, targets)
+      : acrossTrialDisplays(target, targets);
+    if (legal.length < 1) {
+      throw new Error(
+        `Game ${game.id}: no legal ${condition} display for target ${target.label} ` +
+        `in set ${assignment.setId}`
+      );
+    }
+    pickerFor.set(target.image, makeDisplayPicker(legal));
+  }
+
+  // ---- Pre-test: one round, one stage, iterated client-side ----------------
+  // Both partners describe every item independently and ASYNCHRONOUSLY (S4.5).
+  // Deliberately NOT 20 lockstep rounds: that would make each item wait on the
+  // slower partner and roughly double the phase. Empirica advances the stage
+  // when both players have set stage `submit`, so phase cost is max(A, B).
+  addDescribeRound(game, "pretest", pretestItems.length, treatment);
+
   _.times(reps, repNum => {
     const block = _.shuffle(targets)
 
-    // Loop through targets in block
     _.times(numTargets, targetNum => {
       const target = block[targetNum]
-      let tangrams;
 
-      if (game.get("contextStructure") == "noncomp") {
-        const non_target_alternatives = targets.filter(x => x.every(function(element, index) {return element !== target[index];}))
-        const contrast_tangrams = _.sampleSize(non_target_alternatives, game.get("contextSize")-1)
-        //console.log(non_target_alternatives)
-        tangrams = [target].concat(contrast_tangrams)
-        tangrams = _.shuffle(tangrams)
-      } else if (game.get("contextStructure") == "comp-within") {
-        // select one non-target top to serve as the top shape and one non-target bottom to serve as the bottom shape
-        const top_alternative = _.sample(topTangrams.filter(x => x != target[0]));
-        const bottom_alternative = _.sample(bottomTangrams.filter(x => x != target[1]));
-        const contrast_tangrams = [[target[0], bottom_alternative], [top_alternative, target[1]], [top_alternative, bottom_alternative]];
-        //console.log(non_target_alternatives)
-        tangrams = [target].concat(contrast_tangrams)
-        tangrams = _.shuffle(tangrams)
-      } else {
-        let top_alternatives = _.shuffle(topTangrams.filter(x => x != target[0]));
-        let bottom_alternatives = _.shuffle(bottomTangrams.filter(x => x != target[1]));
-        const contrast_tangrams = [[top_alternatives[0], bottom_alternatives[0]], [top_alternatives[1], bottom_alternatives[1]], [top_alternatives[2], bottom_alternatives[2]]];
-        //console.log(non_target_alternatives)
-        tangrams = [target].concat(contrast_tangrams)
-        tangrams = _.shuffle(tangrams)
-      }
-      //console.log(tangrams)
+      const display = condition === "noncomp"
+        ? nonCompDisplay(target, targets, displaySize)
+        : pickerFor.get(target.image)();
 
-      const tangramURLs = []
-      for (let i = 0; i < tangrams.length; i ++ ){
-        tangramURLs.push("/tangrams/" + tangrams[i][0] + "_" + tangrams[i][1] + '.png')
-      }
-      const targetURL = "/tangrams/" + target[0] + "_" + target[1] + '.png'
+      const tangrams = _.shuffle(display);
+      const tangramURLs = tangrams.map(imageURL);
+      const targetURL = imageURL(target);
 
       const round = game.addRound({
+        phase: "training",
+        // Initialised here, at game creation, NOT only in onRoundStart. If the
+        // attribute does not exist yet the client reads `undefined`, and the
+        // strict `=== ""` tests in Tangram.jsx silently swallow matcher clicks
+        // and hide the director's target border. See design doc S6.7.
+        selection: "",
         target: targetURL,
-        numTrials: (reps * numTargets) + 1,
+        numTrials: reps * numTargets,
         targetNum: targetNum + 1,
         trialNum : repNum * numTargets + targetNum,
         repNum : repNum,
         reps: reps,
-        tangramURLs: tangramURLs
+        numTrialsPerBlock: numTargets,
+        tangramURLs: tangramURLs,
+        // Analysis annotations. Labels are per-file conventions and mean
+        // different things in comp vs noncomp -- see the header of exp2.js.
+        targetLabel: target.label,
+        displayLabels: tangrams.map((s) => s.label),
+        setId: assignment.setId,
       });
 
       round.addStage({
@@ -163,7 +226,16 @@ game.set("rotation", gameRotation);
       });
     });
   });
-  console.log(game.get("contextStructure")," ", game.id, " started")
+
+  // NO post-test round. The post-test runs as an EXIT STEP
+  // (client/src/intro-exit/Posttest.jsx) so a participant who finishes first
+  // leaves immediately instead of waiting on their partner. Its items are on the
+  // player scope already, so nothing else is needed here.
+
+  console.log(
+    `${condition} ${game.id} started -- set ${assignment.setId} ` +
+    `(replicate ${assignment.replicate}), ${reps * numTargets} training trials`
+  );
 });
 
 Empirica.onRoundStart(({ round }) => {
@@ -172,7 +244,10 @@ Empirica.onRoundStart(({ round }) => {
   round.set('selection', '')
   round.set("justStarted", true);
 
-  const chat = round.get("chat") ?? [];
+  // The test phases have no roles to alternate -- both partners describe every
+  // item. Swapping here would still balance out, but it would write a
+  // meaningless director/matcher onto the pre/post rounds.
+  if (round.get("phase") !== "training") return;
 
   players.forEach((player, i) => {
     //player.set('clicked', '');
@@ -182,7 +257,33 @@ Empirica.onRoundStart(({ round }) => {
   });
 });
 
+// ITEM 7 / S6.6: per-message timestamps.
+//
+// Empirica's built-in <Chat> exposes no send hook and the messages it stores
+// carry no time field, so Exp 1 had only `chatLastChangedAt` -- the time of the
+// LAST write, usable only on the 87% of rounds with a single message. This
+// records one timestamp per message, making the compose/decide split available
+// on multi-message rounds too.
+//
+// CAVEAT: this is server-RECEIVE time, not client-send time, so it includes the
+// client->server leg. To size that leg, compare the client-stamped
+// `selectionMadeAt` against Empirica's own server-side `selectionLastChangedAt`
+// on the same round; the difference is the one-way lag.
+Empirica.on("round", "chat", (_ctx, { round }) => {
+  const messages = round.get("chat") || [];
+  const stamps = round.get("chatTimestamps") || [];
+  if (messages.length <= stamps.length) return;
+  const now = Date.now();
+  round.set("chatTimestamps", [
+    ...stamps,
+    ...Array(messages.length - stamps.length).fill(now),
+  ]);
+});
+
 Empirica.onStageStart(({ stage }) => {
+  // Client-side render time is stamped by Task.jsx; this is the server's view of
+  // when the stage opened, and the gap between them is transition cost.
+  stage.set("serverStartedAt", Date.now());
 });
 
 Empirica.onStageEnded(({ stage }) => {});
@@ -190,6 +291,22 @@ Empirica.onStageEnded(({ stage }) => {});
 Empirica.onRoundEnded(({ round }) => {
   const players = round.currentGame.players;
   const game = round.currentGame;
+
+  // ITEM 6: only the 48 training trials are bonusable. Free-description trials
+  // have no correct answer, so no bonus can accrue -- and they must not feed the
+  // inactivity counter either, or a slow describer would end the game.
+  if (round.get("phase") !== "training") {
+    const phase = round.get("phase");
+    players.forEach((player) => {
+      const responses = player.get(`${phase}Responses`) || [];
+      console.log(
+        `Game ${game.id} - ${phase} complete for ${player.id}: ` +
+        `${responses.length}/${round.get("numItems")} items described`
+      );
+    });
+    return;
+  }
+
   const target = round.get('target');
   const selectedAnswer = round.get('selection')
 
@@ -233,4 +350,23 @@ Empirica.onRoundEnded(({ round }) => {
   round.set('correct', target === round.get('selection'));
 });
 
-Empirica.onGameEnded(({ game }) => {});
+Empirica.onGameEnded(({ game }) => {
+  // Gate for the post-test exit step: only dyads that actually got through
+  // training have anything to post-test on. A game killed by the inactivity
+  // timeout sends its players straight to the incomplete survey instead.
+  const completed = !game.get("endedInactive");
+  game.players.forEach((player) => player.set("finishedTraining", completed));
+  console.log(
+    `Game ${game.id} ended; finishedTraining=${completed} for ${game.players.length} players`
+  );
+
+  // Refund the stimulus-set slot for games that did not produce usable data, so
+  // a failed dyad does not permanently consume that set's capacity. Games that
+  // completed keep their slot.
+  if (completed) return;
+  const released = releaseSet(game, empiricaCtx?.globals);
+  console.log(
+    `Game ${game.id} ended inactive; set ${game.get("setId")} slot ` +
+    (released ? "released for reuse" : "NOT released (no tally entry)")
+  );
+});

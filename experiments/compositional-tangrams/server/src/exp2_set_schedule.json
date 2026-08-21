@@ -1,0 +1,28 @@
+{
+  "schema_version": "exp2-schedule-1",
+  "generated": "2026-08-21",
+  "source_schema_version": "exp2-1",
+  "selection": {
+    "method": "best",
+    "n_sets": 8,
+    "seed": null,
+    "criterion": "max_full_cross_scored"
+  },
+  "dyads_per_condition_per_set": 2,
+  "conditions": [
+    "comp-within",
+    "comp-between",
+    "noncomp"
+  ],
+  "set_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "notes": "Only these set_ids have images deployed to client/public/tangrams. Re-run scripts/deploy_exp2_images.py before widening the pool."
+}

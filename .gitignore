@@ -143,3 +143,12 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Working notes, specs and drafts -- local scratch for planning/implementation,
+# not project documentation. Deliberately untracked.
+documents/
+
+# Empirica bundles are build artifacts (empirica bundle regenerates them).
+# Keeps ~256MB blobs out of history. Does not affect the already-tracked
+# compShapesV1.tar.zst -- see notes if you want that untracked too.
+*.tar.zst

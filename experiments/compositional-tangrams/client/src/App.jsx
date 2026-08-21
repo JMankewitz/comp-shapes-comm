@@ -12,6 +12,7 @@ import {Consent} from "./intro-exit/Consent"
 import { MyPlayerForm } from "./intro-exit/PlayerCreate.jsx";
 
 import {Quiz} from "./intro-exit/Quiz";
+import { Posttest } from "./intro-exit/Posttest";
 export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const playerKey = urlParams.get("participantKey") || "";
@@ -26,14 +27,26 @@ export default function App() {
   }
 
   function exitSteps({ game, player }) {
-    console.log("Player ended status:", player.get('ended'));
-    //console.log("game ended reason:", game.get("endedReason"))
-    if (player.get('ended') === "game ended" || player.get('endedInactive')){
+    // Empirica sets player `ended` to "game ended" on a NORMAL finish too, so the
+    // old first branch caught every completing participant and showed them the
+    // "you were disconnected" survey. And `endedInactive` was only ever written
+    // at GAME scope (callbacks.js), so `player.get('endedInactive')` was always
+    // undefined -- that clause never fired at all.
+    //
+    // Route on `finishedTraining`, which onGameEnded sets only for games that
+    // were not killed by the inactivity timeout -- not on Empirica's end-reason
+    // strings. The post-test runs here rather than as a game round, so each
+    // participant works through it at their own pace and leaves without waiting
+    // on their partner.
+    if (player.get("finishedTraining")) {
+      return [Posttest, ExitSurvey];
+    }
+    // Reached a game but it ended early: inactivity timeout, or partner dropout.
+    if (player.get("ended") || game?.get("endedInactive")) {
       return [IncompleteExitSurvey];
     }
-    else {
-      return [NoGameSurvey];
-    }
+    // Never matched into a game at all.
+    return [NoGameSurvey];
   }
 
   return (

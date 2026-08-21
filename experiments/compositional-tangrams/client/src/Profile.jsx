@@ -12,7 +12,8 @@ export function Profile() {
   const round = useRound();
   const stage = useStage();
 
-  const score = player.get("score").toFixed(2) || 0;
+  const score = (player.get("score") ?? 0).toFixed(2);
+  const isTraining = round?.get("phase") === "training";
 
   if (stage.get("name") == "feedback") {
     let timer = "--.--"
@@ -22,14 +23,16 @@ export function Profile() {
     <div className="min-w-lg md:min-w-2xl mt-2 m-x-auto px-3 py-2 text-gray-500 rounded-md grid grid-cols-3 items-center border-.5">
       <div className="leading-tight ml-1">
         <div className="text-gray-600 font-semibold">
-        {round ? "Round: " + (round.get("repNum") + 1) + " / " + (round.get('reps')): ""}
-          
+        {isTraining ? "Round: " + (round.get("repNum") + 1) + " / " + (round.get('reps')) : ""}
         </div>
         <div className="text-gray-600 font-semibold">
-        {round ? "Trial: " + round.get("targetNum") + " / 16" : ""}
+        {/* was hardcoded "/ 16"; blocks are 12 trials under Exp 2 */}
+        {isTraining
+          ? "Trial: " + round.get("targetNum") + " / " + (round.get("numTrialsPerBlock") ?? "")
+          : (round ? (round.get("phase") === "pretest" ? "Part 1 of 3" : "Part 3 of 3") : "")}
         </div>
         <div className="text-empirica-500 font-medium">
-          {stage ? stage.get("name") : ""}
+          {isTraining && stage ? stage.get("name") : ""}
         </div>
       </div>
 
