@@ -387,7 +387,11 @@ export const withURLs = (items) => items.map((it) => ({ ...it, url: imageURL(it)
  * noncomp pre-test is 8 items, not 20 (S4.6).
  */
 export function addDescribeRound(game, phase, numItems, treatment) {
-  const perItem = treatment.describeSecondsPerItem ?? 45;
+  // Per-ITEM allowance, enforced client-side with autosubmit (Describe.jsx).
+  // S6.3 estimates ~25s per item, so 60 is generous without letting one stalled
+  // participant hold their partner indefinitely. Bounding the item rather than
+  // the phase means a slow start cannot eat the whole budget.
+  const perItem = treatment.describeSecondsPerItem ?? 60;
   const round = game.addRound({
     phase,
     numItems,
@@ -397,6 +401,9 @@ export function addDescribeRound(game, phase, numItems, treatment) {
     target: "",
     tangramURLs: [],
   });
-  round.addStage({ name: "describe", duration: numItems * perItem });
+  // Backstop only. The client autosubmits each item, so the phase completes in
+  // at most numItems * perItem on its own; the extra 5 minutes covers reading the
+  // interstitial cards, which sit outside the per-item clocks.
+  round.addStage({ name: "describe", duration: numItems * perItem + 300 });
   return round;
 }

@@ -42,7 +42,7 @@ export function ExitSurvey({ next }) {
         </p>
         <p className="pt-1">
           Your final <strong>bonus</strong> is in addition of the{" "}
-          <strong>base reward</strong> for completing the game.
+          <strong>base payment</strong> for the study on Prolific.
         </p>
       </Alert>
 

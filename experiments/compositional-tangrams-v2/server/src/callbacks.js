@@ -123,6 +123,9 @@ Empirica.onGameStart(async ({ game }) => {
   // is driven off array length, never a literal 20.
   const pretestItems = withURLs(selectedSet.pretest_items);
   const posttestItems = withURLs(selectedSet.posttest_items);
+  // Read by the client for the per-item countdown; mirrored onto players below
+  // because the post-test runs as an exit step where game scope is unreliable.
+  game.set("describeSecondsPerItem", treatment.describeSecondsPerItem ?? 60);
   game.set("numPretestItems", pretestItems.length);
   game.set("numPosttestItems", posttestItems.length);
 
@@ -153,6 +156,7 @@ Empirica.onGameStart(async ({ game }) => {
     player.set("posttestItems", post.order);
     player.set("posttestItemGap", post.gap);
     player.set("rotation", gameRotation);
+    player.set("describeSecondsPerItem", treatment.describeSecondsPerItem ?? 60);
     player.set("pretestResponses", []);
     player.set("posttestResponses", []);
   });

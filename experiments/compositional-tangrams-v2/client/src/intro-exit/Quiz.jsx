@@ -90,7 +90,7 @@ export function Quiz({ next }) {
         <h2>Matching Game</h2>
         <div className="mt-3 mb-6">
           <p className="text-md text-gray-900">
-          In this experiment you will play a fun matching game with another turker! Both of you are going to be given a set of tangram pictures which will look like this. 
+          In this experiment you will play a fun matching game with another participant! Both of you are going to be given a set of tangram pictures which will look like this. 
         </p>
         <br></br>
         <p>
@@ -137,9 +137,10 @@ export function Quiz({ next }) {
   given feedback (the director will see what the matcher clicked, and
   the matcher will see the true target), and you will both be
   automatically forwarded to the next round of objects. There are a
-  total of <b>64 rounds</b> with many of the same sets of objects, so each one
-  will be the target several times. After the final round you will
-  fill out a quick 15 second survey and be on your way.
+  total of <b>48 rounds</b> in this part, with the same set of objects recurring,
+  so each one will be the target several times. After the final round you will
+  move on to <b>Part 3</b>, where you describe shapes on your own again just as
+  you did in Part 1, and then a short survey.
 </p>
 <br></br>
 <p> A few final notes: First, since you are playing with another
