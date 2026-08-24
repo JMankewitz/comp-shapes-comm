@@ -41,12 +41,16 @@ export default function App() {
     if (player.get("finishedTraining")) {
       return [Posttest, ExitSurvey];
     }
-    // Reached a game but it ended early: inactivity timeout, or partner dropout.
-    if (player.get("ended") || game?.get("endedInactive")) {
-      return [IncompleteExitSurvey];
+    // Never matched into a game at all (lobby timeout, no partner available).
+    // Discriminate on whether a game EXISTS, not on `player.get("ended")` --
+    // Empirica sets an end reason for unmatched players too, so testing `ended`
+    // first would route them to the "you were disconnected" survey.
+    if (!game) {
+      return [NoGameSurvey];
     }
-    // Never matched into a game at all.
-    return [NoGameSurvey];
+    // Had a game, but it ended before training finished: inactivity timeout, or
+    // a partner who dropped.
+    return [IncompleteExitSurvey];
   }
 
   return (

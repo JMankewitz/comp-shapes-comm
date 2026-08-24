@@ -152,3 +152,9 @@ documents/
 # Keeps ~256MB blobs out of history. Does not affect the already-tracked
 # compShapesV1.tar.zst -- see notes if you want that untracked too.
 *.tar.zst
+
+# Regenerable stimulus-pipeline intermediates (368MB and growing)
+stimuli/generate_tangrams/outputs/checkpoints/
+
+# Data exports: these come home via scp, never through git.
+experiments/*/compShapesV1-*.zip

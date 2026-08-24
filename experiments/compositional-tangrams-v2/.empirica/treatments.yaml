@@ -176,6 +176,21 @@ treatments:
         playerCount: 2
         selectionDuration: 30
         showNegativeFeedback: 1
+    - name: exp2-test-comp-between
+      desc: >-
+        Fast walkthrough of the across-trial flow. Only ~3 legal displays exist
+        per target (S4.2), so displays repeat across blocks -- that is forced by
+        the condition's definition, not a bug.
+      factors:
+        contextSize: 4
+        contextStructure: comp-between
+        describeSecondsPerItem: 10
+        feedbackDuration: 1
+        maxTimeout: 5
+        numRepetitionsWithPartner: 1
+        playerCount: 2
+        selectionDuration: 30
+        showNegativeFeedback: 1
     - name: exp2-test-noncomp
       desc: Fast walkthrough of the noncomp flow, incl. the 8-item pre-test.
       factors:

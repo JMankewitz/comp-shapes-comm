@@ -12,6 +12,8 @@ import {
   nonCompDisplay,
   makeDisplayPicker,
   imageURL,
+  rotationForSet,
+  spacedShuffle,
   withURLs,
   addDescribeRound,
   releaseSet,
@@ -59,13 +61,6 @@ Empirica.onGameStart(async ({ game }) => {
   game.set("maxTimeout", treatment.maxTimeout)
   game.set("numRoundsInactive", 0);
   game.set("endedInactive", false);
-  // rotations
-  const possibleRotations = [0, 90, 180, 270]
-
-const gameRotation = _.sample(possibleRotations)
-console.log("Game rotation set to:", gameRotation, "degrees for game", game.id);
-game.set("rotation", gameRotation);
-
   // Exp 2: the training set, the diagonal holdout and the pre/post item lists are
   // all precomputed in exp2_{comp,noncomp}_sets.json. Read them; do not rebuild
   // the matrix here.
@@ -89,6 +84,11 @@ game.set("rotation", gameRotation);
     throw error;
   }
 
+  // Rotation follows the stimulus set, not the game, so every dyad on a given
+  // set sees an identical display (S4.8). Must come after set assignment.
+  const gameRotation = rotationForSet(assignment.setId);
+  game.set("rotation", gameRotation);
+
   game.set("stimulusSchemaVersion", "exp2-1");
   // noncomp sets carry comp_set_id; it equals set_id for all 500, so all three
   // conditions post-test on identical images. Recorded explicitly so the
@@ -98,7 +98,8 @@ game.set("rotation", gameRotation);
 
   console.log(
     `Game ${game.id} (${condition}) -> set ${assignment.setId}, ` +
-    `replicate ${assignment.replicate}, slot ${assignment.slotInReplicate}. ` +
+    `replicate ${assignment.replicate}, slot ${assignment.slotInReplicate}, ` +
+    `rotation ${gameRotation}deg. ` +
     `Tally now ${JSON.stringify(assignment.tallyAfterClaim)}`
   );
 
@@ -137,12 +138,20 @@ game.set("rotation", gameRotation);
     player.set("role", i == 0 ? 'director' : 'matcher'); //first player is always speaker (if overfill there may be multiple listeners??)
     player.set("bonus", 0);
     player.set("score", 0);
-    // Each partner walks their own shuffled order so the two are not in lockstep
-    // and sequence effects do not align within a dyad. Per-item measures join on
+    // Each partner walks their own order so the two are not in lockstep and
+    // sequence effects do not align within a dyad. Per-item measures join on
     // `image`, so partner alignment (DV5) is unaffected.
-    player.set("pretestItems", _.shuffle(pretestItems));
+    //
+    // Spaced, not plain, shuffle: consecutive items must not share a top or a
+    // bottom, or the test itself demonstrates that shapes decompose (S4.5).
+    // Applied to BOTH phases so pre and post are ordered by the same procedure.
+    const pre = spacedShuffle(pretestItems);
+    const post = spacedShuffle(posttestItems);
+    player.set("pretestItems", pre.order);
+    player.set("pretestItemGap", pre.gap);
     // Read by the post-test exit step, where the game scope is not reliable.
-    player.set("posttestItems", _.shuffle(posttestItems));
+    player.set("posttestItems", post.order);
+    player.set("posttestItemGap", post.gap);
     player.set("rotation", gameRotation);
     player.set("pretestResponses", []);
     player.set("posttestResponses", []);
@@ -307,6 +316,12 @@ Empirica.onRoundEnded(({ round }) => {
     return;
   }
 
+  // Counts rounds that actually finished, so completion is measured rather than
+  // inferred from how the game ended. `endedInactive` only covers the inactivity
+  // timeout; a partner closing their tab ends the game with that flag still
+  // false, which would otherwise mark a 3-of-48 dropout as a full completion.
+  game.set("trainingRoundsCompleted", (game.get("trainingRoundsCompleted") || 0) + 1);
+
   const target = round.get('target');
   const selectedAnswer = round.get('selection')
 
@@ -354,10 +369,15 @@ Empirica.onGameEnded(({ game }) => {
   // Gate for the post-test exit step: only dyads that actually got through
   // training have anything to post-test on. A game killed by the inactivity
   // timeout sends its players straight to the incomplete survey instead.
-  const completed = !game.get("endedInactive");
+  const done = game.get("trainingRoundsCompleted") || 0;
+  const expected =
+    (game.get("treatment")?.numRepetitionsWithPartner || 0) * (game.get("targets") || []).length;
+  const completed = !game.get("endedInactive") && expected > 0 && done >= expected;
   game.players.forEach((player) => player.set("finishedTraining", completed));
+  game.set("trainingRoundsExpected", expected);
   console.log(
-    `Game ${game.id} ended; finishedTraining=${completed} for ${game.players.length} players`
+    `Game ${game.id} ended; training ${done}/${expected}, endedInactive=` +
+    `${game.get("endedInactive")} -> finishedTraining=${completed}`
   );
 
   // Refund the stimulus-set slot for games that did not produce usable data, so

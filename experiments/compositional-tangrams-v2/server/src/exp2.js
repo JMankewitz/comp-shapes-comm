@@ -316,6 +316,62 @@ export function makeDisplayPicker(allDisplays) {
 
 export const imageURL = (shape) => `/tangrams/${shape.top}_${shape.bottom}.png`;
 
+export const ROTATIONS = [0, 90, 180, 270];
+
+/**
+ * Rotation is a property of the STIMULUS SET, not of the game (changed 2026-08).
+ *
+ * It used to be `_.sample(ROTATIONS)` per game, so two dyads assigned the same
+ * set could see the shapes at different orientations. That silently breaks S4.8:
+ * the between-dyad comparison is defined as two dyads facing the *exact same
+ * environment*, and a 90-degree difference is a different environment for
+ * anything descriptions are built on ("pointy bit on the left"). It would also
+ * contaminate the within-set between-condition contrast, since a comp-within and
+ * a comp-between dyad on set N are supposed to be stimulus-matched.
+ *
+ * Deriving it from set_id keeps every dyad on a set -- in every condition --
+ * seeing an identical display, while still spreading all four orientations
+ * evenly across the set pool.
+ */
+export const rotationForSet = (setId) => ROTATIONS[setId % ROTATIONS.length];
+
+/**
+ * Shuffle an item list so no component reappears within `minGap` trials.
+ *
+ * A plain shuffle averages ~2.4 adjacent component-sharing pairs across the
+ * 20-item test list, which puts e.g. A2 directly before A1 and hands the
+ * participant the decomposition for free. S4.5 flags this leak -- exposure to
+ * recurring components across trials is the across-trial CONDITION, so the
+ * pre-test must not teach it -- and back-to-back repeats are its worst case.
+ *
+ * Greedy build with restarts, relaxing the gap only if the tighter one cannot be
+ * satisfied. On the 20-item list k=4 succeeds ~18% of attempts (so effectively
+ * always within 200 tries) and k=5 is not reliably satisfiable, since four tops
+ * and four bottoms each appear 3 times in 20 trials. The achieved gap is
+ * returned so it can be recorded per player rather than silently assumed.
+ */
+export function spacedShuffle(items, { minGap = 4, attempts = 200 } = {}) {
+  const shares = (a, b) => a.top === b.top || a.bottom === b.bottom;
+
+  for (let gap = minGap; gap >= 1; gap--) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const remaining = _.shuffle(items);
+      const order = [];
+      let stuck = false;
+      while (remaining.length) {
+        const recent = order.slice(-gap);
+        const idx = remaining.findIndex((it) => !recent.some((r) => shares(r, it)));
+        if (idx === -1) { stuck = true; break; }
+        order.push(remaining.splice(idx, 1)[0]);
+      }
+      if (!stuck) return { order, gap };
+    }
+  }
+  // Unreachable for the real item lists; never block a game on ordering.
+  console.warn("spacedShuffle: no spaced ordering found, falling back to plain shuffle");
+  return { order: _.shuffle(items), gap: 0 };
+}
+
 /** Attach the client-facing URL so the description phase needs no path logic. */
 export const withURLs = (items) => items.map((it) => ({ ...it, url: imageURL(it) }));
 

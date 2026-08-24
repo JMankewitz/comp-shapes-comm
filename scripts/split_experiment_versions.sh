@@ -17,8 +17,9 @@
 # repo growth near zero. scripts/deploy_exp2_images.py becomes the single source
 # of truth for v2's stimuli -- rerun it to widen the set pool.
 #
-# RUN THIS ONLY ON A CLEAN TREE, AFTER COMMITTING THE EXP 2 WORK.
-# It refuses otherwise. Nothing here commits; review with `git status` and
+# RUN THIS AFTER COMMITTING THE EXP 2 WORK. It checks that the paths it rewrites
+# are clean (unrelated work in progress elsewhere in the repo is fine) and
+# refuses otherwise. Nothing here commits; review with `git status` and
 # `git diff --cached` afterwards, then commit yourself.
 
 set -euo pipefail
@@ -37,12 +38,30 @@ step() { echo; echo "==> $*"; }
 # --- preflight ---------------------------------------------------------------
 cd "$(git rev-parse --show-toplevel)" || die "not inside a git repository"
 
-git diff --quiet || die "working tree has unstaged changes. Commit or stash first."
-git diff --cached --quiet || die "index has staged changes. Commit them first."
+# Only the paths this script rewrites need to be clean. Unrelated work in
+# progress elsewhere in the repo (analysis/, stimuli/, ...) is none of its
+# business and must not block the split.
+TOUCHED=("$SRC")
+for p in "${TOUCHED[@]}"; do
+  [ -e "$p" ] || continue
+  git diff --quiet -- "$p" \
+    || die "unstaged changes in $p -- commit or stash them first."
+  git diff --cached --quiet -- "$p" \
+    || die "staged-but-uncommitted changes in $p -- commit them first."
+done
 
-[ -d "$SRC" ] || die "$SRC not found (already split?)"
-[ -e "$V1" ] && die "$V1 already exists"
-[ -e "$V2" ] && die "$V2 already exists"
+# Resume support: if the move already happened, skip to the prune. Steps 3-4 are
+# independent of 1-2, so a failure in the prune does not require undoing a
+# 43,000-file rename.
+RESUME=0
+if [ -d "$V1" ] && [ -d "$V2" ] && [ ! -d "$SRC" ]; then
+  RESUME=1
+  echo "NOTE: $V1 and $V2 already exist -- resuming from the prune step."
+else
+  [ -d "$SRC" ] || die "$SRC not found (already split?)"
+  [ -e "$V1" ] && die "$V1 already exists"
+  [ -e "$V2" ] && die "$V2 already exists"
+fi
 
 git cat-file -e "${EXP1_REF}^{commit}" 2>/dev/null || die "EXP1_REF $EXP1_REF not found"
 [ "$(git rev-parse HEAD)" != "$EXP1_REF" ] || die \
@@ -56,13 +75,17 @@ echo "HEAD:     $(git log -1 --format='%h %s')"
 echo "Exp 1 at: $(git log -1 --format='%h %s' "$EXP1_REF")"
 
 # --- 1. current work becomes v2 ----------------------------------------------
-step "Moving current experiment -> $V2"
-git mv "$SRC" "$V2"
+if [ "$RESUME" -eq 0 ]; then
+  step "Moving current experiment -> $V2"
+  git mv "$SRC" "$V2"
+fi
 
 # --- 2. Exp 1 restored from its own commit becomes v1 ------------------------
-step "Restoring Exp 1 from $EXP1_REF -> $V1"
-git checkout "$EXP1_REF" -- "$SRC"
-git mv "$SRC" "$V1"
+if [ "$RESUME" -eq 0 ]; then
+  step "Restoring Exp 1 from $EXP1_REF -> $V1"
+  git checkout "$EXP1_REF" -- "$SRC"
+  git mv "$SRC" "$V1"
+fi
 
 # --- 3. strip Exp 1 ballast out of v2 ----------------------------------------
 # All of this belongs to Exp 1 only. v2 has its own exp2_*.json stimulus files
@@ -79,8 +102,19 @@ for p in \
   "$V2/client/src/noncomp_sets.json"
 do
   if [ -e "$p" ]; then
-    git rm -r -q "$p"
-    echo "    removed $p"
+    # Some of these are tracked and some are not (the rebuilt bundle is now
+    # untracked and gitignored). `git rm` errors on an untracked path, which
+    # under `set -e` would abort mid-split, so fall back to a plain remove.
+    if git ls-files --error-unmatch "$p" >/dev/null 2>&1; then
+      # -f is required, not optional: step 1's `git mv` leaves every path under
+      # $V2 staged, and `git rm` refuses paths with staged changes unless forced.
+      # Without it the first prune aborts the whole script under `set -e`.
+      git rm -r -q -f "$p"
+      echo "    removed (tracked)   $p"
+    else
+      rm -rf "$p"
+      echo "    removed (untracked) $p"
+    fi
   fi
 done
 
