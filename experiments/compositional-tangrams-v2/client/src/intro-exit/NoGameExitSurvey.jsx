@@ -1,4 +1,5 @@
 import React from "react";
+import { COMPLETION_CODES } from "../completionCodes";
 import { usePlayer } from "@empirica/core/player/classic/react";
 import { Alert } from "../components/Alert";
 import { Button } from "../components/Button";
@@ -26,7 +27,7 @@ export function NoGameSurvey({ next }) {
       <Alert title="Payment">
         <p>
         If you would like to re-enter the queue, please contact the researcher on Prolific. Otherwise, please submit the following code to receive a partial payment:{" "}
-          <strong>CYIFL77P</strong>
+          <strong>{COMPLETION_CODES.NO_MATCH}</strong>
         </p>
         <p className="pt-1">
           Thank you for your time and willingness to participate in our study.

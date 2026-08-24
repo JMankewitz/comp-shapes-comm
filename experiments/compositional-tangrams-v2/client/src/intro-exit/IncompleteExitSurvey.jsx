@@ -1,5 +1,6 @@
 import { usePlayer } from "@empirica/core/player/classic/react";
 import React, { useState } from "react";
+import { COMPLETION_CODES } from "../completionCodes";
 import { Alert } from "../components/Alert";
 import { Button } from "../components/Button";
 
@@ -44,7 +45,7 @@ export function IncompleteExitSurvey({ next }) {
       <Alert title="Bonus">
         <p>
           Please submit the following code to receive your bonus:{" "}
-          <strong>C1DOSPNG</strong>.
+          <strong>{COMPLETION_CODES.INCOMPLETE}</strong>.
         </p>
         <p className="pt-1">
           Your final <strong>bonus</strong> is in addition of the{" "}

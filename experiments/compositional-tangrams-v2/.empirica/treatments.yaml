@@ -47,6 +47,8 @@ factors:
         submit long before it fires. Drives the pre/post phases off item count,
         which is 20 for comp but only 8 for the noncomp pre-test (S4.6).
       values:
+        - value: 60
+        - value: 90
         - value: 45
         - value: 20
         - value: 10
@@ -130,7 +132,7 @@ treatments:
       factors:
         contextSize: 4
         contextStructure: comp-within
-        describeSecondsPerItem: 45
+        describeSecondsPerItem: 60
         feedbackDuration: 3
         maxTimeout: 5
         numRepetitionsWithPartner: 4
@@ -142,7 +144,7 @@ treatments:
       factors:
         contextSize: 4
         contextStructure: comp-between
-        describeSecondsPerItem: 45
+        describeSecondsPerItem: 60
         feedbackDuration: 3
         maxTimeout: 5
         numRepetitionsWithPartner: 4
@@ -157,7 +159,7 @@ treatments:
       factors:
         contextSize: 4
         contextStructure: noncomp
-        describeSecondsPerItem: 45
+        describeSecondsPerItem: 60
         feedbackDuration: 3
         maxTimeout: 5
         numRepetitionsWithPartner: 4

@@ -7,7 +7,7 @@ run by hand, one at a time — nothing here is automated on purpose.
 project   hs-social-interaction-lab
 host      social-interaction-lab-small-runs   (us-central1-f, n2-standard-2)
 external  34.135.228.108
-port      3001                                (NOT 3000 — see below)
+port      3001   via --addr :3001            (NOT 3000 — see below)
 ```
 
 Workflow is unchanged from Exp 1: push to GitHub → `git pull` on the VM → `empirica
@@ -82,6 +82,23 @@ Sanity check — should be ~13 MB and 319 images:
 du -sh experiments/compositional-tangrams-v2 && ls experiments/compositional-tangrams-v2/client/public/tangrams | wc -l
 ```
 
+**Install dependencies before the first bundle.** `empirica bundle` runs
+`npm run build`, not `npm install` — on a fresh clone there is no `node_modules`,
+so the build falls through to whatever global `vite` exists on the box (currently
+7.2.2, which demands Node 20.19+ and cannot find
+`@vitejs/plugin-react-refresh`). The error looks like a Node version problem but
+is really a missing-dependency problem. Locally this never surfaces because
+`node_modules` is already there from development.
+
+```bash
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2/client && npm install && cd ../server && npm install
+```
+
+Empirica pins Node 20.10.0 itself via the `volta` field in `package.json`, using
+its own vendored volta under `~/.local/share/empirica` — that pin is correct and
+the locally-installed `vite 2.9.15` works fine on it. Do not "fix" the Node
+version.
+
 ---
 
 ## Each deployment
@@ -99,8 +116,26 @@ tmux new -s exp2
 ```
 
 ```bash
-cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && empirica bundle && empirica serve *.tar.zst --port 3001
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && EMPIRICA_PORT=3001 empirica bundle && EMPIRICA_PORT=3001 empirica serve compShapesV1.tar.zst --addr :3001
 ```
+
+**Both the flag and the env var are required, and they must match.**
+
+- `--addr :3001` moves the server's listener. It is `--addr` (or `--server.addr`),
+  **not** `--port` — Empirica v1.12.1 rejects `--port` as an unknown flag. Note the
+  leading colon: `--addr :3001` binds all interfaces, while `--addr 3001` is read as
+  a hostname.
+- `EMPIRICA_PORT=3001` tells the **callbacks process** where to connect back to.
+  `server/src/index.js` builds its websocket URL from it. Empirica does not pass
+  `--addr` through to the callbacks, so without this they dial `localhost:3000` —
+  which on this shared host is another lab member's app, and the handshake dies with
+  `Unexpected server response: 404` on `/query`.
+
+Exp 1 never hit this because it always ran on the default 3000, where the old
+hardcoded fallback happened to be correct.
+
+On startup the callbacks log `callbacks: connecting to http://localhost:3001/query`.
+If that line says 3000, the env var did not take.
 
 Detach with **ctrl-b then d**. Do *not* ctrl-c — that ends the study. Reattach later
 with `tmux attach -t exp2`.
