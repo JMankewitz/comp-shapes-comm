@@ -164,7 +164,18 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
             "Your partner is still working through their own shapes. The next part will begin automatically as soon as they finish."}
         </p>
         <p className="text-sm text-gray-500">
-          You do not need to do anything — please keep this tab open.
+          You do not need to do anything — please keep this tab open. This usually
+          takes a minute or two.
+        </p>
+        {/* Two pilot participants waited 30 and 45 minutes here before giving up,
+            because nothing on screen said the wait was bounded. The server-side
+            watchdog now ends the game if a partner goes silent, but saying so
+            matters as much as doing it: people return studies when they cannot
+            tell a slow wait from a broken one. */}
+        <p className="text-sm text-gray-500">
+          If your partner has left, this will end on its own within a few minutes
+          and you will still be paid for the work you have done. You do not need to
+          message us or return the study.
         </p>
       </PhaseCard>
     );

@@ -38,7 +38,21 @@ setLogLevel(argv["loglevel"] || "info");
   );
 
   ctx.register(ClassicLoader);
-  ctx.register(Classic());
+
+  // preferUnderassignedGames: fill games that already have players before
+  // starting new ones. Empirica's DEFAULT is pure random assignment across every
+  // unstarted game in the batch, which scatters arrivals -- two ready players in
+  // the same condition can sit in different half-full games and never match.
+  // That directly inflates the recruitment ratio (S6.1, 1.74 players per kept
+  // player) because unmatched players time out and take the NO_MATCH code.
+  //
+  // NOTE: this only has anything to choose from when a batch contains MORE THAN
+  // ONE game. With one game per batch it is a no-op -- see DEPLOY.md.
+  //
+  // neverOverbookGames deliberately left off: overbooking is what lets a game
+  // start promptly when someone abandons during the intro steps, and surplus
+  // players are reassigned to another game with the same treatment.
+  ctx.register(Classic({ preferUnderassignedGames: true }));
   ctx.register(Lobby());
   ctx.register(Empirica);
   ctx.register(function (_) {

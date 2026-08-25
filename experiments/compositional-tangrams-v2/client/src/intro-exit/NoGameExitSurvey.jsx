@@ -1,5 +1,4 @@
 import React from "react";
-import { COMPLETION_CODES } from "../completionCodes";
 import { usePlayer } from "@empirica/core/player/classic/react";
 import { Alert } from "../components/Alert";
 import { Button } from "../components/Button";
@@ -24,10 +23,16 @@ export function NoGameSurvey({ next }) {
           
         </p>
       </Alert>
-      <Alert title="Payment">
+      <Alert title="How to be paid for your time">
         <p>
-        If you would like to re-enter the queue, please contact the researcher on Prolific. Otherwise, please submit the following code to receive a partial payment:{" "}
-          <strong>{COMPLETION_CODES.NO_MATCH}</strong>
+          <strong>Please RETURN this submission on Prolific.</strong> Returning does
+          not count against you, and it frees the slot so another participant can be
+          matched.
+        </p>
+        <p className="pt-1">
+          We will send you a <strong>bonus payment of $2.50</strong> for the time you
+          spent, usually within 24 hours. You do not need a completion code, and you
+          do not need to do anything else.
         </p>
         <p className="pt-1">
           Thank you for your time and willingness to participate in our study.

@@ -27,5 +27,15 @@ export const COMPLETION_CODES = {
   INCOMPLETE: "C1NK2P4O",
 
   // Never matched into a game at all (lobby timeout, no partner available).
+  //
+  // NO LONGER SHOWN TO PARTICIPANTS (changed 2026-08). Unmatched participants are
+  // asked to RETURN the submission instead, and are paid by bulk bonus afterwards.
+  // Prolific confirms a returned or timed-out submission is still bonusable, and
+  // returning frees the recruitment place so another participant can be matched --
+  // whereas submitting a code consumes a place that produced no data. This also
+  // avoids custom-screening slots entirely, which throttle recruitment whenever
+  // slots < places and leave an unspent reservation to reclaim.
+  //
+  // Kept defined so the Prolific study config and this file stay in sync.
   NO_MATCH: "CG2CK987",
 };

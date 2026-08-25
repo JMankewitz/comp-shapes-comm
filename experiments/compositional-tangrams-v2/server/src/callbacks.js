@@ -26,7 +26,94 @@ let empiricaCtx = null;
 Empirica.on("start", (ctx) => {
   empiricaCtx = ctx;
   console.log("Exp 2: Empirica context captured; global set tally available");
+  setInterval(() => guardAbandonedDescribeStages(ctx), DESCRIBE_WATCHDOG_TICK_MS);
 });
+
+// ---------------------------------------------------------------------------
+// Pre-test abandonment guard
+//
+// The description stage advances only when BOTH players submit. Nothing in the
+// round lifecycle fires while a phase is stalled, so a participant whose partner
+// walks away has no protection except the stage duration cap -- 20+ minutes of
+// staring at "Waiting for your partner". In the first pilot wave two people sat
+// there for 30 and 45 minutes and returned the study.
+//
+// An absent participant produces no events, so this has to be polled.
+//
+// The check is unambiguous because of the per-item autosubmit: an ACTIVE
+// participant writes a response at least once every describeSecondsPerItem
+// (60s), even if they type nothing. So three minutes with zero new responses,
+// while their partner has already submitted, means they are gone -- not slow.
+// ---------------------------------------------------------------------------
+
+const DESCRIBE_WATCHDOG_TICK_MS = 30 * 1000;
+const DESCRIBE_ABANDON_MS = 3 * 60 * 1000;
+
+// gameID -> { counts: "a,b", since: timestamp }
+const describeProgress = new Map();
+
+function guardAbandonedDescribeStages(ctx) {
+  let games;
+  try {
+    games = ctx.scopesByKind("game");
+  } catch (err) {
+    return; // context not ready; try again next tick
+  }
+  if (!games) return;
+
+  for (const [, game] of games) {
+    try {
+      const stage = game.currentStage;
+      if (!stage || stage.get("name") !== "describe") {
+        describeProgress.delete(game.id);
+        continue;
+      }
+      if (game.hasEnded) continue;
+
+      const round = stage.round;
+      const phase = round && round.get("phase");
+      if (phase !== "pretest") continue; // post-test is a solo exit step
+
+      const players = game.players || [];
+      if (players.length < 2) continue;
+
+      const counts = players
+        .map((p) => (p.get("pretestResponses") || []).length)
+        .join(",");
+      const anySubmitted = players.some(
+        (p) => p.stage && p.stage.get("submit")
+      );
+
+      const prior = describeProgress.get(game.id);
+      if (!prior || prior.counts !== counts) {
+        describeProgress.set(game.id, { counts, since: Date.now() });
+        continue;
+      }
+
+      const stalledFor = Date.now() - prior.since;
+      if (!anySubmitted || stalledFor < DESCRIBE_ABANDON_MS) continue;
+
+      // One partner is done, the other has written nothing for three minutes.
+      // The dyad cannot proceed to training, so end the game rather than leave
+      // the present participant waiting out the stage cap. They keep their
+      // pre-test data and route to the incomplete exit survey.
+      const stranded = players
+        .filter((p) => p.stage && p.stage.get("submit"))
+        .map((p) => p.id);
+      console.log(
+        `Game ${game.id}: pre-test abandoned -- responses stuck at [${counts}] ` +
+        `for ${Math.round(stalledFor / 1000)}s with a partner already submitted. ` +
+        `Ending game; stranded player(s): ${stranded.join(", ")}`
+      );
+      game.set("endedInactive", true);
+      game.set("endedReason", "pretest abandoned by a partner");
+      game.end("ended", "pretestAbandoned");
+      describeProgress.delete(game.id);
+    } catch (err) {
+      console.error(`describe watchdog error on game ${game && game.id}:`, err);
+    }
+  }
+}
 
 const names = [
 "Repi",
@@ -340,28 +427,54 @@ Empirica.onRoundEnded(({ round }) => {
   const currentInactive = game.get("numRoundsInactive");
 
   console.log(`Game ${game.id} - ${round.get("trialNum")}/${round.get("numTrials")}`);
-  console.log(`- target: "${target}", selection: "${currentSelection}", inactive count: ${game.get("numRoundsInactive")}`);
+  console.log(`- target: "${target}", selection: "${currentSelection}", messages: ${messageCount}, inactive count: ${game.get("numRoundsInactive")}`);
   
-  if (currentSelection === '') {
-    // No selection - increment inactivity counter
-    const currNumInactive = game.get("numRoundsInactive");
-    const newInactiveCount = currNumInactive + 1;
-    game.set("numRoundsInactive", newInactiveCount);
-  
-    // Check if exceeded timeout
-    if (newInactiveCount >= game.get("maxTimeout")) {
-      if (!game.get("ended")) {
-        console.log(`Marking Game ${game.id} as ended due to timeout`);
-        game.set("endedInactive", true);
-        game.end("ended", "timeOut");
-      }
+  // Inactivity is tracked PER PLAYER, not per game.
+  //
+  // Two failure modes have to be told apart, and neither a game-level counter nor
+  // a selection-only test can do it:
+  //
+  //   * Both present, talking, failing to converge. Keying on `selection` alone
+  //     killed exactly this: a comp-within dyad chatted every round and had their
+  //     game ended at trial 19 of 48. The within-trial display always contains a
+  //     top-sharer and a bottom-sharer (S4.2), so timing out is an expected
+  //     outcome of the manipulation, not evidence of absence.
+  //   * One player gone, the other still typing. A game-level "was there any
+  //     chat" test never fires here, so the present partner would be held for the
+  //     remaining ~45 minutes of a dead game.
+  //
+  // A player is active in a round if they sent a message or made the selection.
+  // The game ends when ANY player has been silent for maxTimeout rounds, which
+  // frees the partner promptly while never punishing a pair who are both trying.
+  const chat = round.get("chat");
+  const messages = Array.isArray(chat) ? chat : (chat ? [chat] : []);
+  const senders = new Set(
+    messages.map((m) => (m && m.sender && m.sender.id) || null).filter(Boolean)
+  );
+  const selectedBy = currentSelection !== '' ? round.get("matcher") : null;
+
+  players.forEach((player) => {
+    const acted = senders.has(player.id) || player.id === selectedBy;
+    const prior = player.get("roundsInactive") || 0;
+    player.set("roundsInactive", acted ? 0 : prior + 1);
+  });
+
+  const perPlayerInactive = players.map((p) => p.get("roundsInactive") || 0);
+  const worstInactive = perPlayerInactive.length ? Math.max(...perPlayerInactive) : 0;
+  const messageCount = messages.length;
+
+  // Kept for continuity with Exp 1 exports; the decision now uses worstInactive.
+  game.set("numRoundsInactive", worstInactive);
+
+  if (worstInactive >= game.get("maxTimeout")) {
+    if (!game.get("ended")) {
+      console.log(
+        `Marking Game ${game.id} as ended: a player has been inactive for ` +
+        `${worstInactive} rounds (per-player counts ${JSON.stringify(perPlayerInactive)})`
+      );
+      game.set("endedInactive", true);
+      game.end("ended", "timeOut");
     }
-  } else {
-    // Only log if we're resetting from an inactive state
-    if (currentInactive > 0) {
-      console.log(`Reset inactivity counter for game ${game.id} - they responded after ${currentInactive} inactive rounds`);
-    } 
-    game.set("numRoundsInactive", 0);
   }
 
   // Save outcomes as property of round for later export/analysis
