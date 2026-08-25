@@ -1,0 +1,3 @@
+prolificID,amount,group,action,minutes,pretest,posttest,category,already_paid,contextStructure,gameID
+test0,0.03,data,CHECK: has data but only 6 min -- then approve ($11.00) + bonus,6.2,20,0,bonus,FALSE,comp-within,01M0VCG4YJ3SSHK6866WMH2XYH
+test2,0.03,data,CHECK: has data but only 5 min -- then approve ($11.00) + bonus,5,20,0,bonus,FALSE,comp-within,01M0VCG4YJ3SSHK6866WMH2XYH

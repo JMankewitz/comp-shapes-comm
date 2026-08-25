@@ -1,0 +1,2 @@
+gameID,batchID,contextStructure,contextSize,status,setId,setIndex,setReplicate,setSlotInReplicate,compSetId,rotation,numPretestItems,numPosttestItems,describeSecondsPerItem,stimulusSchemaVersion,trainingLabels,endedInactive,trainingRoundsCompleted,trainingRoundsExpected,endedReason
+01M0VCG4YJ3SSHK6866WMH2XYH,01M0VCG4Y0J8Y1GSZHGVHG3219,comp-within,4,ended,0,0,0,0,0,0,20,20,10,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",TRUE,9,12,timeOut

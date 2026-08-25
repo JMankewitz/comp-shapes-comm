@@ -158,3 +158,5 @@ stimuli/generate_tangrams/outputs/checkpoints/
 
 # Data exports: these come home via scp, never through git.
 experiments/*/compShapesV1-*.zip
+data/chat_data/chat_pairwise_similarities.csv
+data/processed_data/exp_1/message_similarities.csv

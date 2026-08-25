@@ -1,0 +1,33 @@
+prolificID,amount,group,action,minutes,pretest,posttest,category,already_paid,contextStructure,gameID
+6682b0b622da87763c14179c,0,data,approve ($11.00) + bonus,74.1,8,0,bonus,FALSE,noncomp,01M0TSZGKJQW5S4GCP9150DNN9
+69f3f390222a796dadbcad80,0,data,approve ($11.00) + bonus,68.3,8,0,bonus,FALSE,noncomp,01M0TSZGKJQW5S4GCP9150DNN9
+69d8eab7b04ea057a65bdb4d,1.05,data,approve ($11.00) + bonus,67.5,20,20,bonus,TRUE,comp-within,01M0TSZV8KEDQHAT4X33M1GG1C
+69ebeb5ab230d108c7d3da5b,0.87,data,approve ($11.00) + bonus,63.9,20,20,bonus,TRUE,comp-within,01M0TSZEY54T11A9AMGVA6T4ZB
+651090beae417ded35c4ef2f,0.87,data,approve ($11.00) + bonus,63.8,20,20,bonus,TRUE,comp-within,01M0TSZEY54T11A9AMGVA6T4ZB
+5fb0a3d6a8e4224b973e750b,1.05,data,approve ($11.00) + bonus,62.5,20,20,bonus,TRUE,comp-within,01M0TSZV8KEDQHAT4X33M1GG1C
+69d67e558286a0e5a947c5e4,0.06,data,approve ($11.00) + bonus,58.9,20,0,bonus,TRUE,comp-within,01M0TTMWMDPGAHQRDA7BZJ8FEZ
+653129416eb74adb10bb7c42,1.26,data,approve ($11.00) + bonus,48.6,8,20,bonus,TRUE,noncomp,01M0TSZEY44B7XSP574QH2WQPJ
+69e1199b8f7afa332ba699d8,0.06,data,approve ($11.00) + bonus,47.8,20,0,bonus,TRUE,comp-within,01M0TTMWMDPGAHQRDA7BZJ8FEZ
+5bd2e5ee1f1b080001bf2f99,1.38,data,approve ($11.00) + bonus,45.1,20,20,bonus,TRUE,comp-between,01M0TSZEY173D8F3KEP071GR06
+69f50555738454257ae26623,1.26,data,approve ($11.00) + bonus,44.9,8,20,bonus,TRUE,noncomp,01M0TSZEY44B7XSP574QH2WQPJ
+699759948aebc61b33ad51ff,1.26,data,approve ($11.00) + bonus,43.4,20,20,bonus,TRUE,comp-between,01M0TSZV8ERABP36QP2627EVMT
+60fcb280d58f26d33cb004a6,1.44,data,approve ($11.00) + bonus,42.2,20,20,bonus,TRUE,comp-between,01M0TTMWM9GSP2NP0T4CET96EB
+6643fe2c8c07d3b6cc064568,1.26,data,approve ($11.00) + bonus,41.1,0,20,bonus,TRUE,comp-between,01M0TSZV8ERABP36QP2627EVMT
+6413bee5234ad46e9fc4ba75,1.44,data,approve ($11.00) + bonus,39.5,8,20,bonus,TRUE,noncomp,01M0TSZV8KEDQHAT4X3FNKVS2B
+6694154a46060b3c49b2d6fd,1.44,data,approve ($11.00) + bonus,39,8,20,bonus,TRUE,noncomp,01M0TSZV8KEDQHAT4X3FNKVS2B
+69dd8d9a6de6c1b518e17d68,1.38,data,approve ($11.00) + bonus,38.4,20,20,bonus,TRUE,comp-between,01M0TSZEY173D8F3KEP071GR06
+66cdeb8a1b24ca4b3267616c,1.44,data,approve ($11.00) + bonus,34.1,20,20,bonus,TRUE,comp-between,01M0TTMWM9GSP2NP0T4CET96EB
+69f8540e0ff15f500637a750,1.44,data,approve ($11.00) + bonus,31.2,8,20,bonus,TRUE,noncomp,01M0TTMWMG725DJ5GA5M4WD8SY
+6a14f818ca7d49f469ab3163,1.44,data,approve ($11.00) + bonus,28.4,8,20,bonus,TRUE,noncomp,01M0TTMWMG725DJ5GA5M4WD8SY
+69ffc6f620b31c75a8c503cc,0,data,CHECK: has data but only 20 min -- then approve ($11.00) + bonus,19.7,20,0,bonus,FALSE,comp-within,01M0TSZGKM72FFW193EYG47F25
+65dcbd7dd5a7a319e8d61474,0,data,CHECK: has data but only 18 min -- then approve ($11.00) + bonus,18.1,20,0,bonus,FALSE,comp-between,01M0TSZGKE32G3R2H2EPQFBQNN
+6941b81a664a46d54b61d856,0,data,CHECK: has data but only 8 min -- then approve ($11.00) + bonus,8.1,8,0,bonus,FALSE,comp-within,01M0TSZGKM72FFW193EYG47F25
+69d427d3d6e8572d8fefa0ed,0,data,CHECK: has data but only 5 min -- then approve ($11.00) + bonus,4.7,20,0,bonus,FALSE,comp-between,01M0TSZGKE32G3R2H2EPQFBQNN
+67e04d59fb6ce30ffec59479,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",24.2,0,0,no_lobby,TRUE,NA,null
+5a4c334121bfa00001081a4e,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",12.8,0,0,no_lobby,TRUE,NA,null
+699293129f0baf693f34d7db,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",12.1,0,0,no_lobby,TRUE,NA,null
+6a0c5f6a4974d3dfbeb467ae,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",9.6,0,0,no_lobby,TRUE,NA,null
+6789c9643fe66949b90a5aaa,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",7.2,0,0,no_lobby,TRUE,NA,null
+665f9223c7db27a5d32d81ab,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",6.8,0,0,no_lobby,TRUE,NA,null
+6a1c96d787ea5e658f7ad88e,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",4.3,0,0,no_lobby,TRUE,NA,null
+6a025bee5cff78609f5f0cd9,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",3.9,0,0,no_lobby,TRUE,NA,null

@@ -6,6 +6,8 @@ import { Game } from "./Game";
 import { ExitSurvey } from "./intro-exit/ExitSurvey";
 import { IncompleteExitSurvey } from "./intro-exit/IncompleteExitSurvey";
 import { NoGameSurvey } from "./intro-exit/NoGameExitSurvey";
+import { LobbyExitSurvey } from "./intro-exit/LobbyExitSurvey";
+import { exitTier } from "./tiers";
 
 import { Introduction } from "./intro-exit/Introduction";
 import {Consent} from "./intro-exit/Consent"
@@ -42,16 +44,27 @@ export default function App() {
     if (player.get("finishedTraining")) {
       return [Posttest, ExitSurvey];
     }
-    // Never matched into a game at all (lobby timeout, no partner available).
-    // Discriminate on whether a game EXISTS, not on `player.get("ended")` --
-    // Empirica sets an end reason for unmatched players too, so testing `ended`
-    // first would route them to the "you were disconnected" survey.
-    if (!game) {
-      return [NoGameSurvey];
+    // Everything below the post-test is one decision, made in tiers.js so that
+    // this file, Finished.jsx and 00_preprocessing.R cannot disagree about which
+    // tier someone is in -- they used to, and participants got contradictory
+    // instructions about whether to submit or return.
+    switch (exitTier(player)) {
+      case "lobby":
+        // Either no partner ever arrived, or they held a slot in a game that ran
+        // and contributed nothing. No completion code either way.
+        return [
+          (props) => (
+            <LobbyExitSurvey {...props} noPartner={!game} />
+          ),
+        ];
+      case "no_lobby":
+      case "no_intro":
+        return [NoGameSurvey];
+      default:
+        // Had a game and contributed, but it ended before training finished:
+        // inactivity timeout, or a partner who dropped. Paid in full.
+        return [IncompleteExitSurvey];
     }
-    // Had a game, but it ended before training finished: inactivity timeout, or
-    // a partner who dropped.
-    return [IncompleteExitSurvey];
   }
 
   return (

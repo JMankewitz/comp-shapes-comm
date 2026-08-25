@@ -148,6 +148,199 @@ credentials.
 
 ---
 
+## Launching a new wave
+
+`[L]` = laptop, `[VM]` = server. Run top to bottom.
+
+**1. Export** the finished wave from the admin UI: <http://34.135.228.108:3001/admin>
+
+**2. [L]** Pull + unpack + preprocess every new export:
+
+```bash
+python3 scripts/ingest_exports.py --into pilot_v1 --preprocess
+```
+
+**3. [L]** Pay this wave now — don't wait for the study to end.
+
+Preprocessing (step 2) already wrote the paste-ready files. All are two columns,
+no header, so select the whole file and paste into Prolific's bulk bonus box.
+In `data/processed_data/exp_2/pilot_v1/<wave>/`:
+
+| file | tier | what to do |
+|---|---|---|
+| `bonus.csv` | gave data | **approve** the submission ($11 base), then paste the bonus |
+| `lobby.csv` | held a slot, no data | paste $2.50; they were told to return |
+| `turned_away.csv` | some intro, no lobby | paste $1.00; they were told to return |
+| `returns.csv` | turned away at entry | nothing to pay — ask them to return |
+
+`payments.csv` has everyone with `group`, `action`, `minutes` and `already_paid`
+for anything you want to check by hand. Anyone under ~25 min is flagged CHECK.
+
+**3b. [L]** After Prolific confirms the payments went through:
+
+```bash
+python3 scripts/mark_paid.py pilot_v1/<wave>
+```
+
+Only run this once the money has actually landed. The ledger exists to stop the
+same list being pasted twice, and it is only useful if a row means "Prolific
+accepted this" rather than "I meant to pay this". Add `--only bonus` / `--only
+lobby` / `--only turned_away` if you pay the tiers at different times.
+
+**4. [L]** Plan the next wave (review, then `--write`):
+
+```bash
+python3 scripts/plan_next_wave.py --n-sets 75
+```
+
+```bash
+python3 scripts/plan_next_wave.py --n-sets 75 --write
+```
+
+**5. [L]** Deploy images if the schedule reached new sets:
+
+```bash
+python3 scripts/deploy_exp2_images.py --n-sets 75
+```
+
+**6. [L]** Push:
+
+```bash
+git add -A experiments/compositional-tangrams-v2 scripts analysis && git commit -m "wave N" && git push origin master
+```
+
+**7. [VM]** SSH in:
+
+```bash
+gcloud compute ssh social-interaction-lab-small-runs --zone=us-central1-f --project=hs-social-interaction-lab
+```
+
+**8. [VM]** Kill the old server and any orphaned callbacks — must print `0`:
+
+```bash
+tmux kill-server; pkill -u $USER -f callBackSessionToken; sleep 1; ps -u $USER -o cmd | grep -c callBackSessionToken
+```
+
+**9. [VM]** Pull, check disk, wipe the datastore:
+
+```bash
+cd ~/comp-shapes-comm && git fetch --depth 1 origin master && git reset --hard origin/master && df -h /
+```
+
+```bash
+rm -f ~/comp-shapes-comm/experiments/compositional-tangrams-v2/.empirica/local/tajriba.json
+```
+
+**10. [VM]** Start in tmux:
+
+```bash
+tmux new -s exp2
+```
+
+```bash
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && EMPIRICA_PORT=3001 empirica bundle && EMPIRICA_PORT=3001 empirica serve compShapesV1.tar.zst --addr :3001 2>&1 | tee -a ~/exp2-serve.log
+```
+
+**11. [VM]** Detach with **ctrl-b** then **d** (release ctrl first). If that fails, from a second shell:
+
+```bash
+tmux detach-client -s exp2
+```
+
+**12. [VM]** Watch:
+
+```bash
+tail -f ~/exp2-serve.log
+```
+
+**13. [L]** Verify, then create **fresh batches** in the admin UI:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://34.135.228.108:3001/
+```
+
+### Gotchas
+
+- Never pipe `empirica serve` to `head` — SIGPIPE kills the study. `tee` is safe.
+- Batches snapshot the treatment at creation. Old batches carry old values; always make new ones.
+- First games should log the sets step 4 printed. `set 0` when the schedule said otherwise = the VM didn't pull.
+- Re-exporting is safe — coverage dedups by ULID. Export often, pay promptly.
+
+---
+
+## Running a wave
+
+Order matters — several of these fail silently if skipped.
+
+**1. Wipe the datastore.** The cross-batch stimulus-set tally lives in Empirica's
+global scope, stored in `tajriba.json`. Test dyads keep their claim on set 0
+otherwise and the allocation starts skewed.
+
+```bash
+tmux kill-server; rm -f ~/comp-shapes-comm/experiments/compositional-tangrams-v2/.empirica/local/tajriba.json
+```
+
+**2. Check disk before every wave.** `tajriba.json` grows ~0.5 MB/min during a run
+and never compacts. Under ~500 MB free, reclaim first.
+
+```bash
+df -h / && npm cache clean --force && sudo apt-get clean && sudo journalctl --vacuum-size=50M
+```
+
+**3. Create fresh batches.** Batch configs snapshot the treatment **at creation**,
+so a batch made before a `treatments.yaml` edit still runs the old values — this is
+how a wave silently ran at `describeSecondsPerItem: 45` after it had been changed
+to 60. Use **one batch per game per condition** (Empirica's documented
+recommendation): each batch holds 1 game per treatment.
+
+**4. Watch the first few games in the log.** Expect:
+
+```
+Game ... (comp-within) -> set 0, replicate 0, slot 0, rotation 0deg. Tally now {...}
+Game ... (comp-within) -> set 0, replicate 0, slot 1, rotation 0deg.
+Game ... (comp-between) -> set 0, replicate 0, slot 0, rotation 0deg.
+```
+
+Each condition tallies independently, so all three start at set 0 — that is what
+makes the within-set between-condition contrast stimulus-matched. Sets fill
+depth-first (both slots of set 0 before set 1) because the analysis unit is the
+PAIR: a set with one dyad contributes nothing to the between-dyad comparison.
+
+## Monitoring a live wave
+
+Both scripts are read-only and run on your laptop against a snapshot, so they
+cannot disturb the server. The admin console shows internal ULIDs and goes blind
+once a game ends — which is exactly when the post-test runs, since it is an exit
+step.
+
+```bash
+gcloud compute scp --zone=us-central1-f --project=hs-social-interaction-lab "social-interaction-lab-small-runs:~/comp-shapes-comm/experiments/compositional-tangrams-v2/.empirica/local/tajriba.json" /tmp/taj.json
+```
+
+```bash
+python3 scripts/pilot_status.py /tmp/taj.json
+```
+
+`pilot_status.py` gives post-test progress and pairings keyed by Prolific ID.
+
+Payment lists come from preprocessing an export, not from the live snapshot —
+see "Launching a new wave" step 3.
+
+## After an unplanned restart
+
+A restart can leave a stage `started=True, ended=False` with an expired duration,
+and submits recorded *before* the restart may not be honoured after it. That is
+what left two pilot participants on "Waiting for your partner" for 30 and 45
+minutes. After any unexpected restart, look for such rounds and end those games
+deliberately rather than leaving people hanging.
+
+**Never pipe `empirica serve` to `head`.** `head` exits after N lines, the pipe
+closes, and empirica dies on SIGPIPE mid-study. Use `tee`:
+
+```bash
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && EMPIRICA_PORT=3001 empirica serve compShapesV1.tar.zst --addr :3001 2>&1 | tee -a ~/exp2-serve.log
+```
+
 ## Before recruiting
 
 **Wipe the datastore on the VM** after any smoke testing:

@@ -1,0 +1,29 @@
+prolificID,amount,group,action,minutes,pretest,posttest,category,already_paid,contextStructure,gameID
+69ea3b15912a521f9cff7fe4,1.26,data,approve ($11.00) + bonus,70.1,20,20,bonus,TRUE,comp-within,01M0WWQAZPP7VBJF1WXDE2YKFW
+5efa33c4e9f4160ffd817db9,1.26,data,approve ($11.00) + bonus,59.2,20,20,bonus,TRUE,comp-within,01M0WWQAZPP7VBJF1WXDE2YKFW
+69f586544b0395e639960cd5,1.08,data,approve ($11.00) + bonus,58.1,20,20,bonus,TRUE,comp-between,01M0WWQ9XT2Q7RF2RHNCTTRDNK
+6401df832098d19588cc570e,1.26,data,approve ($11.00) + bonus,55.8,20,20,bonus,TRUE,comp-within,01M0WWQ9XW83PGVA4HF3WT9HVR
+6a1f029546cb342499d058e0,1.38,data,approve ($11.00) + bonus,54.1,20,20,bonus,TRUE,comp-between,01M0WWQ74H7CSGCPAHPDSCJ0PV
+69b82db646bc5827579dc5ca,1.26,data,approve ($11.00) + bonus,53.1,20,20,bonus,TRUE,comp-within,01M0WWQ9XW83PGVA4HF3WT9HVR
+6a184212ea66f7cc4204ee31,1.08,data,approve ($11.00) + bonus,50.8,20,20,bonus,TRUE,comp-between,01M0WWQ9XT2Q7RF2RHNCTTRDNK
+69ef7af401f65f406ca12641,1.35,data,approve ($11.00) + bonus,42.3,8,20,bonus,TRUE,noncomp,01M0WWQ9XVXJV1JR4118CY5W09
+5e909d6c5321c13abee11725,1.38,data,approve ($11.00) + bonus,40.9,20,20,bonus,TRUE,comp-between,01M0WWQ74H7CSGCPAHPDSCJ0PV
+69fca44d94ec531037c06e3f,0.18,data,approve ($11.00) + bonus,37.4,20,0,bonus,TRUE,comp-within,01M0WWQ74ND1AHANTF309RNWJE
+698a7999e94d553c9b39fa49,0.18,data,approve ($11.00) + bonus,33.6,20,0,bonus,FALSE,comp-within,01M0WWQ74ND1AHANTF309RNWJE
+6a05f99c631ebdf67b5a0e72,1.38,data,approve ($11.00) + bonus,32.4,8,20,bonus,TRUE,noncomp,01M0WWQAZTRSENW9JN2FSQ4BA7
+69136f38f5249650219269cd,1.38,data,approve ($11.00) + bonus,32.1,8,20,bonus,TRUE,noncomp,01M0WWQAZTRSENW9JN2FSQ4BA7
+6a02ed5bd6acf52c07ab46fa,1.35,data,approve ($11.00) + bonus,31.3,8,20,bonus,TRUE,noncomp,01M0WWQ9XVXJV1JR4118CY5W09
+69dae6f92db929c858644edc,0.06,data,approve ($11.00) + bonus,28.2,8,0,bonus,TRUE,noncomp,01M0WWQ74M3NWYAJGQB0ESKAD2
+6a01ff6ad4eb5460ca9a3013,0.06,data,CHECK: has data but only 23 min -- then approve ($11.00) + bonus,23.4,8,0,bonus,TRUE,noncomp,01M0WWQ74M3NWYAJGQB0ESKAD2
+671c1c699ca32031a83014e8,0,data,CHECK: has data but only 23 min -- then approve ($11.00) + bonus,22.9,20,0,bonus,FALSE,comp-between,01M0WWQAZRRWZPK3N7VE24RFV2
+6a08d479a47f468584f7e4db,2.5,lobby,"pay lobby $2.50 -- in a game, contributed nothing",43.6,0,0,lobby,FALSE,comp-between,01M0WWQAZRRWZPK3N7VE24RFV2
+67a7d4e19fee63cbe222ae02,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",8,0,0,no_lobby,TRUE,NA,null
+668bf688d58206e61f399a88,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",6.2,0,0,no_lobby,TRUE,NA,null
+6a082b5b68b0948671bfa8d5,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",4.8,0,0,no_lobby,TRUE,NA,null
+67e5ebfad8af26b1bb60e460,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",3.9,0,0,no_lobby,TRUE,NA,null
+6765de7067ea602040582812,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",2.7,0,0,no_lobby,TRUE,NA,null
+6a21dca5a615df63e52c6f89,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",2.3,0,0,no_lobby,TRUE,NA,null
+66d5d931d3a66fa93bdfddb9,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",1.8,0,0,no_lobby,TRUE,NA,null
+69c2a1ca204d43b99f204424@email.prolific.com,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",1.8,0,0,no_lobby,TRUE,NA,null
+66fd3f6c93c24ecc119be354,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",1.7,0,0,no_lobby,TRUE,NA,null
+6a06fc17dd60a09eb3ac9bbd,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",1,0,0,no_lobby,TRUE,NA,null

@@ -1,6 +1,7 @@
 import { usePlayer } from "@empirica/core/player/classic/react";
 import React from "react";
 import { COMPLETION_CODES } from "../completionCodes";
+import { PAY, exitTier, money } from "../tiers";
 
 // The very last screen, shown after the exit survey is submitted.
 //
@@ -11,15 +12,17 @@ import { COMPLETION_CODES } from "../completionCodes";
 // to do. This is the screen that answers that, at the moment they need it.
 //
 // Which outcome a participant is in is readable from their own attributes:
-//   completedStudy   -> finished the post-test
-//   gameID present   -> reached a game but it ended early
-//   neither          -> never matched into a game
+// Which outcome a participant is in comes from tiers.js, shared with App.jsx so
+// the page they land on and the code printed here cannot disagree. It used to
+// branch on `gameID` alone, which handed the INCOMPLETE code to lobby-timeout
+// participants -- they have a gameID -- while their exit page told them to
+// return with no code, and promised $2.50 to people owed $1.00.
 export function Finished() {
   const player = usePlayer();
 
   const completed = player.get("completedStudy");
-  const hadGame = Boolean(player.get("gameID"));
   const bonus = player.get("bonus") || 0;
+  const tier = completed ? "complete" : exitTier(player);
 
   let title, code, body, action;
 
@@ -36,7 +39,7 @@ export function Finished() {
       </>
     );
     action = "submit";
-  } else if (hadGame) {
+  } else if (tier === "incomplete") {
     title = "Thank you — your session ended early";
     code = COMPLETION_CODES.INCOMPLETE;
     body = (
@@ -50,7 +53,7 @@ export function Finished() {
           You will be paid for the work you completed
           {bonus > 0 ? (
             <>
-              , including the <strong>${bonus.toFixed(2)}</strong> bonus you earned
+              , including the <strong>{money(bonus)}</strong> bonus you earned
             </>
           ) : null}
           .
@@ -58,20 +61,50 @@ export function Finished() {
       </>
     );
     action = "submit";
-  } else {
+  } else if (tier === "lobby") {
     title = "Thank you for your time";
     code = null;
     body = (
       <>
         <p>
-          We were not able to match you with a partner. This study needs two people
-          at once, so sometimes there is nobody available.
+          Your session did not go ahead — either no partner became available, or
+          it ended before any responses were recorded. This study needs two
+          people at once, so sometimes there is nobody available.
         </p>
         <p>
-          We will send you a <strong>bonus payment of $2.50</strong> for the time
+          We will send you a <strong>bonus payment of {money(PAY.LOBBY)}</strong>{" "}
+          for your time, usually within 24 hours.
+        </p>
+      </>
+    );
+    action = "return";
+  } else if (tier === "no_lobby") {
+    title = "Thank you for your time";
+    code = null;
+    body = (
+      <>
+        <p>
+          All of the available sessions had already filled by the time you
+          finished getting started, so we were not able to place you in a game.
+        </p>
+        <p>
+          We will send you a{" "}
+          <strong>bonus payment of {money(PAY.NO_LOBBY)}</strong> for the time
           you spent, usually within 24 hours.
         </p>
       </>
+    );
+    action = "return";
+  } else {
+    // no_intro: turned away at entry, before seeing anything at all.
+    title = "Thank you for your time";
+    code = null;
+    body = (
+      <p>
+        All of the available sessions had already filled, so we were not able to
+        place you in a game. Nothing was recorded and there is nothing further
+        you need to do.
+      </p>
     );
     action = "return";
   }
@@ -103,7 +136,9 @@ export function Finished() {
             <p className="text-sm text-amber-900">
               There is no completion code for this outcome. Returning does not count
               against you, and it frees the slot so someone else can be matched. Your
-              $2.50 will arrive as a bonus payment.
+              {tier === "no_intro"
+                ? "Nothing further is needed from you."
+                : `Your ${money(tier === "lobby" ? PAY.LOBBY : PAY.NO_LOBBY)} will arrive as a bonus payment.`}
             </p>
           </div>
         )}
