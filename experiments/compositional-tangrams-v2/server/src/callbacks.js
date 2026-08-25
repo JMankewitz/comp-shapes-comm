@@ -426,9 +426,6 @@ Empirica.onRoundEnded(({ round }) => {
   const currentSelection = round.get('selection');
   const currentInactive = game.get("numRoundsInactive");
 
-  console.log(`Game ${game.id} - ${round.get("trialNum")}/${round.get("numTrials")}`);
-  console.log(`- target: "${target}", selection: "${currentSelection}", messages: ${messageCount}, inactive count: ${game.get("numRoundsInactive")}`);
-  
   // Inactivity is tracked PER PLAYER, not per game.
   //
   // Two failure modes have to be told apart, and neither a game-level counter nor
@@ -465,6 +462,12 @@ Empirica.onRoundEnded(({ round }) => {
 
   // Kept for continuity with Exp 1 exports; the decision now uses worstInactive.
   game.set("numRoundsInactive", worstInactive);
+
+  console.log(`Game ${game.id} - ${round.get("trialNum")}/${round.get("numTrials")}`);
+  console.log(
+    `- target: "${target}", selection: "${currentSelection}", ` +
+    `messages: ${messageCount}, inactive per player: ${JSON.stringify(perPlayerInactive)}`
+  );
 
   if (worstInactive >= game.get("maxTimeout")) {
     if (!game.get("ended")) {
