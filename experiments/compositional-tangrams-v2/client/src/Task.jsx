@@ -43,6 +43,17 @@ export function Task() {
     }
   }, [round?.id, stage?.get("name")]);
 
+  // Counterpart to the pre-test stamps in Game.jsx. Task only ever mounts for a
+  // training round (pretest renders Describe; posttest is an exit step), so the
+  // first mount IS entry into training. A player with pretestSubmittedAt but no
+  // trainingStartedAt got stuck at the handoff and never saw a trial -- which is
+  // invisible in the export without this.
+  useEffect(() => {
+    if (player && !player.get("trainingStartedAt")) {
+      player.set("trainingStartedAt", Date.now());
+    }
+  }, []);
+
   //console.log(player.get("role"))
   let finalTangramURLs = tangramURLs;
   if (player.get("role") === 'director'){
@@ -67,12 +78,25 @@ const tangramsToRender = finalTangramURLs.map((tangram, i) => (
   />
 ));
 
+const partnerID = player.get('partner');
+const partnerSpoke = (round.get('chat') || []).some(
+  (m) => m?.sender?.id === partnerID
+);
+
 let feedback = '';
 
 if (stage.get('name') == 'feedback') {
   if (round.get('selection') == '') {
     if (player.get('role') == 'director') {
       feedback = "Oops! Your partner did not respond in time."
+    } else if (!partnerSpoke) {
+      // The matcher CANNOT select until the director has described the target,
+      // so a timeout in that situation is not theirs. Telling them they "did not
+      // respond in time" blames the only person still playing, once per round
+      // for the whole timeout window -- it produced the single piece of angry
+      // feedback in the pilot ("annoying to be told I hadn't matched in time
+      // when you can't click anything until your partner gives clues").
+      feedback = "Your partner didn't send a description this round."
     } else {
       feedback = "Oops! You did not respond in time."
     }
@@ -96,6 +120,19 @@ if (stage.get('name') == 'feedback') {
   feedback = '';
 };
 
+// Standing notice while a partner is unresponsive. This does NOT shorten the
+// inactivity timeout -- maxTimeout rounds is a deliberate grace window, long
+// enough for a brief blip to resolve. It only stops the survivor spending that
+// window guessing whether the study is broken, and reassures them about pay
+// before they decide to close the tab too.
+const partner = (players || []).find((p) => p.id === partnerID);
+const partnerInactive = partner?.get("roundsInactive") || 0;
+const notice =
+  partnerInactive >= 2
+    ? `Your partner hasn't responded for ${partnerInactive} rounds. If they don't ` +
+      `come back the game will end early — you'll still be paid in full for your time.`
+    : '';
+
 
   return (
 
@@ -107,6 +144,9 @@ if (stage.get('name') == 'feedback') {
             <h2 className="feedbackIndicator" style={{'float': 'center', 'marginLeft': '50px', fontSize: '20px'}}> {feedback}</h2>
           ) : (
             <div style={{height: '20px'}}></div>
+          )}
+          {notice !== '' && (
+            <h3 className="noticeIndicator" style={{fontSize: '15px', color: '#B45309', marginTop: '4px', textAlign: 'center', maxWidth: '640px'}}>{notice}</h3>
           )}
           
         </div>

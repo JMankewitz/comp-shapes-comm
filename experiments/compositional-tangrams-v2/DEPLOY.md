@@ -109,6 +109,24 @@ Pull the latest (from `~/comp-shapes-comm` on the VM):
 git fetch --depth 1 origin master && git reset --hard origin/master
 ```
 
+**Build on the VM.** The bundle is gitignored (`*.tar.zst`), so it is never
+pushed or pulled — each host builds its own from the source it just checked out.
+
+```bash
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && EMPIRICA_PORT=3001 empirica bundle
+```
+
+Check the bundle is actually newer than the source you just pulled. `empirica
+serve` does **not** rebuild, so restarting a server without bundling silently
+serves the old client — the failure is invisible, because the app comes up fine
+and simply behaves like the previous version:
+
+```bash
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && ls -l --time-style=+%H:%M compShapesV1.tar.zst && find client/src server/src -newer compShapesV1.tar.zst -name '*.js*' | head
+```
+
+If that `find` prints any file, the bundle is stale — bundle again before serving.
+
 Start it in tmux:
 
 ```bash
@@ -116,7 +134,7 @@ tmux new -s exp2
 ```
 
 ```bash
-cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && EMPIRICA_PORT=3001 empirica bundle && EMPIRICA_PORT=3001 empirica serve compShapesV1.tar.zst --addr :3001
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && EMPIRICA_PORT=3001 empirica serve compShapesV1.tar.zst --addr :3001
 ```
 
 **Both the flag and the env var are required, and they must match.**
@@ -190,18 +208,46 @@ lobby` / `--only turned_away` if you pay the tiers at different times.
 **4. [L]** Plan the next wave (review, then `--write`):
 
 ```bash
-python3 scripts/plan_next_wave.py --n-sets 75
+python3 scripts/plan_next_wave.py --n-sets 75 --exclude-games data/processed_data/exp_2/excluded_games.csv
 ```
+
+Always pass `--exclude-games`. Coverage counts dyads that *completed*, and a dyad
+excluded post hoc (AI use, degenerate responses) completed exactly like a real
+one — so without this its set reads as finished and the hole is only discovered
+at analysis time, after recruitment has closed. Add rows to that CSV as each
+wave's quality screens run, not at the end.
+
+The report ends with `dyads still needed next wave: ...` — that total is what to
+recruit, not `n_sets x 2 x 3`.
 
 ```bash
 python3 scripts/plan_next_wave.py --n-sets 75 --write
 ```
 
-**5. [L]** Deploy images if the schedule reached new sets:
+`--write` now emits a `targets` map (remaining dyads per condition per set, `0`
+meaning finished) and stamps the schedule `exp2-schedule-2`. A bundle older than
+that throws on load rather than ignoring the targets, so the code and the
+schedule must ship in the same deploy — which steps 6–10 already do.
+
+`--n-sets` is the size of the pool the schedule will name — 8 while piloting,
+~75 for the full study (S4.8). It must match what you deploy images for in step
+5. A schedule naming 75 sets when only 8 sets of PNGs are on the VM will happily
+assign a dyad to set 40 and serve them broken images; the schedule's own `notes`
+field says as much. Widening the pool means widening both, and the VM has ~938 MB
+free — check `df -h /` before a large jump.
+
+**5. [L]** Deploy images for the sets step 4 chose. Use the exact
+`--set-ids` line `plan_next_wave.py` printed:
 
 ```bash
-python3 scripts/deploy_exp2_images.py --n-sets 75
+python3 scripts/deploy_exp2_images.py --set-ids 2,3,4,5,6,7,8,9
 ```
+
+**Do not pass `--n-sets` here.** Both scripts write the same
+`server/src/exp2_set_schedule.json`, and `--n-sets N` re-selects the best N sets
+from scratch — silently overwriting the plan step 4 just wrote, including the
+partially-collected sets it resumed. The images would then be for a different
+pool than the schedule names, and the first games log sets whose PNGs are absent.
 
 **6. [L]** Push:
 
@@ -258,6 +304,17 @@ tail -f ~/exp2-serve.log
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" http://34.135.228.108:3001/
 ```
+
+A 200 only proves the server is up — it says nothing about whether the browser is
+running the new bundle, which is the part that silently fails. After the first
+dyad reaches training, confirm the client-side stamps are being written:
+
+```bash
+grep -c '"trainingStartedAt"' ~/comp-shapes-comm/experiments/compositional-tangrams-v2/.empirica/local/tajriba.json
+```
+
+Two per dyad that entered training. `0` means the bundle is stale — the pull
+landed but `empirica bundle` did not rerun, or it ran before the pull.
 
 ### Gotchas
 
@@ -343,21 +400,12 @@ cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && EMPIRICA_PORT=300
 
 ## Before recruiting
 
-**Wipe the datastore on the VM** after any smoke testing:
+Superseded by "Launching a new wave" (steps 9 and 13) and "Running a wave", which
+cover the wipe and the batch pattern in the order they actually happen. Kept only
+for the one fact that lives nowhere else:
 
-```bash
-rm -f ~/comp-shapes-comm/experiments/compositional-tangrams-v2/.empirica/local/tajriba.json
-```
-
-This matters more than it looks. The cross-batch stimulus-set tally lives in Empirica's
-global scope, which is stored in `tajriba.json`. Test dyads keep their claim on set 0
-otherwise, and the allocation silently starts skewed.
-
-Then create batches from the admin UI — **one batch per game per condition**, which is
-the pattern the set-assignment code is built around.
-
-Set Prolific duration and pay from the ~43 min estimate in the design doc (§6.3), not
-from Exp 1's numbers.
+Set Prolific duration and pay from the ~43 min estimate in the design doc (§6.3),
+not from Exp 1's numbers. The pilot's measured median was 38.4 min.
 
 ---
 

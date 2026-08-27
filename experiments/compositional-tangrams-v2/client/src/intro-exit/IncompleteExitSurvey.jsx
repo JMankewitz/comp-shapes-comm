@@ -16,6 +16,13 @@ export function IncompleteExitSurvey({ next }) {
   const [enjoy, setenjoy] = useState("");
   const [feedback, setFeedback] = useState("");
   const [education, setEducation] = useState("");
+  // Why the session ended. The pilot's attrition causes were recoverable only by
+  // reading chat transcripts and render timestamps by hand; the generic
+  // strategy/enjoy/feedback boxes never ask what actually happened, so people
+  // mentioned it only by chance. As a coded field this becomes a column that can
+  // be watched during the run instead of reconstructed after it.
+  const [endedWhy, setEndedWhy] = useState("");
+  const [endedWhyOther, setEndedWhyOther] = useState("");
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -26,8 +33,14 @@ export function IncompleteExitSurvey({ next }) {
       enjoy,
       feedback,
       education,
+      endedWhy,
+      endedWhyOther,
     });
     next();
+  }
+
+  function handleEndedWhyChange(e) {
+    setEndedWhy(e.target.value);
   }
 
   function handleEducationChange(e) {
@@ -138,6 +151,68 @@ export function IncompleteExitSurvey({ next }) {
                     onChange={handleEducationChange}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className={labelClassName}>
+                  The study ended early. What happened, as best you can tell?
+                </label>
+                <div className="grid gap-2">
+                  <Radio
+                    selected={endedWhy}
+                    name="endedWhy"
+                    value="partner-stopped"
+                    label="My partner stopped responding"
+                    onChange={handleEndedWhyChange}
+                  />
+                  <Radio
+                    selected={endedWhy}
+                    name="endedWhy"
+                    value="my-connection"
+                    label="My internet or device dropped out"
+                    onChange={handleEndedWhyChange}
+                  />
+                  <Radio
+                    selected={endedWhy}
+                    name="endedWhy"
+                    value="stepped-away"
+                    label="I had to step away and could not get back in time"
+                    onChange={handleEndedWhyChange}
+                  />
+                  <Radio
+                    selected={endedWhy}
+                    name="endedWhy"
+                    value="never-started"
+                    label="The game never really started, or I was stuck on one screen"
+                    onChange={handleEndedWhyChange}
+                  />
+                  <Radio
+                    selected={endedWhy}
+                    name="endedWhy"
+                    value="chose-to-stop"
+                    label="I decided to stop"
+                    onChange={handleEndedWhyChange}
+                  />
+                  <Radio
+                    selected={endedWhy}
+                    name="endedWhy"
+                    value="unsure"
+                    label="Something else / I'm not sure"
+                    onChange={handleEndedWhyChange}
+                  />
+                </div>
+                <label className={labelClassName} htmlFor="endedWhyOther">
+                  If you can, say a little more about what you saw.
+                </label>
+                <textarea
+                  className={inputClassName}
+                  dir="auto"
+                  id="endedWhyOther"
+                  name="endedWhyOther"
+                  rows={2}
+                  value={endedWhyOther}
+                  onChange={(e) => setEndedWhyOther(e.target.value)}
+                />
               </div>
 
               <div className="grid grid-cols-3 gap-x-6 gap-y-3">

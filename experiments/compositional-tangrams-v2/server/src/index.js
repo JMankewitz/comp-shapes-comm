@@ -39,20 +39,50 @@ setLogLevel(argv["loglevel"] || "info");
 
   ctx.register(ClassicLoader);
 
-  // preferUnderassignedGames: fill games that already have players before
-  // starting new ones. Empirica's DEFAULT is pure random assignment across every
-  // unstarted game in the batch, which scatters arrivals -- two ready players in
-  // the same condition can sit in different half-full games and never match.
-  // That directly inflates the recruitment ratio (S6.1, 1.74 players per kept
-  // player) because unmatched players time out and take the NO_MATCH code.
+  // preferUnderassignedGames does NOT concentrate arrivals. Verified against
+  // @empirica/core dist (assignPlayer):
   //
-  // NOTE: this only has anything to choose from when a batch contains MORE THAN
-  // ONE game. With one game per batch it is a no-op -- see DEPLOY.md.
+  //   const filteredGames = availableGames.filter(g => g.players.length < playerCount);
+  //   ...
+  //   const game = pickRandom(availableGames);
   //
-  // neverOverbookGames deliberately left off: overbooking is what lets a game
-  // start promptly when someone abandons during the intro steps, and surplus
-  // players are reassigned to another game with the same treatment.
-  ctx.register(Classic({ preferUnderassignedGames: true }));
+  // It filters out games that are already FULL, then picks at RANDOM among the
+  // rest. A game holding one waiting player ranks no higher than an untouched
+  // one. So it prevents overbooking; it does nothing to pair people up.
+  //
+  // The real lever is HOW MANY GAMES ARE OPEN AT ONCE. Arrivals scatter across
+  // whatever games exist, so a pool much larger than the number of concurrent
+  // participants produces games holding one player each, all of whom wait the
+  // full lobby duration and then time out. Aim for open games per condition
+  // ~= half the expected concurrent participants per condition, and start extra
+  // batches only as the running ones fill. A batch contributes its games as
+  // soon as it is STARTED, so a reserve batch must be left unstarted.
+  //
+  // neverOverbookGames ON. Batches are walked IN ORDER and the loop returns on
+  // the first assignment, so batch 2 is only reached when batch 1 has no
+  // assignable games -- a reserve batch does work as a reserve. But when every
+  // game in batch 1 is full-but-unstarted, filteredGames is empty and the
+  // default is to OVERBOOK within batch 1 rather than move on:
+  //
+  //   if (filteredGames.length === 0) {
+  //     if (neverOverbookGames) { availableGames = []; }  // -> continue, next batch
+  //     else { /* overbook */ }
+  //   }
+  //
+  // Setting it empties availableGames, which hits `continue` and flows surplus
+  // players into the overflow batch instead of stuffing them into full games.
+  //
+  // It also matches the payment policy: once every batch is exhausted a player
+  // gets `ended = "no more games"` and is turned away at $0-$1, rather than
+  // being assigned to a game that cannot start and timing out at $2.50.
+  //
+  // Cost: overbooking was the cheap insurance for someone abandoning during the
+  // intro steps. That is still covered -- an abandoned seat leaves the game
+  // non-full, so the next arrival fills it; it just is not pre-staffed.
+  ctx.register(Classic({
+    preferUnderassignedGames: true,
+    neverOverbookGames: true,
+  }));
   ctx.register(Lobby());
   ctx.register(Empirica);
   ctx.register(function (_) {

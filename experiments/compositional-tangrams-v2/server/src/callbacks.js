@@ -48,6 +48,13 @@ Empirica.on("start", (ctx) => {
 
 const DESCRIBE_WATCHDOG_TICK_MS = 30 * 1000;
 const DESCRIBE_ABANDON_MS = 3 * 60 * 1000;
+// A player holding a COMPLETE set of responses has not abandoned anything --
+// they are one click from training. A real dyad was lost to this: both partners
+// wrote all 20 descriptions, one never clicked through the acknowledgement card,
+// and three minutes later this watchdog killed the game as `pretestAbandoned`,
+// discarding two finished pre-tests. The client now rings a bell and flashes the
+// tab title at that moment; this gives them time to act on it.
+const DESCRIBE_COMPLETE_GRACE_MS = 10 * 60 * 1000;
 
 // gameID -> { counts: "a,b", since: timestamp }
 const describeProgress = new Map();
@@ -90,8 +97,20 @@ function guardAbandonedDescribeStages(ctx) {
         continue;
       }
 
+      // How many items this condition's pre-test has (noncomp is 8, not 20).
+      const expected = game.get("numPretestItems");
+      const allComplete =
+        typeof expected === "number" &&
+        expected > 0 &&
+        players.every(
+          (p) => (p.get("pretestResponses") || []).length >= expected
+        );
+
       const stalledFor = Date.now() - prior.since;
-      if (!anySubmitted || stalledFor < DESCRIBE_ABANDON_MS) continue;
+      const limit = allComplete
+        ? DESCRIBE_COMPLETE_GRACE_MS
+        : DESCRIBE_ABANDON_MS;
+      if (!anySubmitted || stalledFor < limit) continue;
 
       // One partner is done, the other has written nothing for three minutes.
       // The dyad cannot proceed to training, so end the game rather than leave
@@ -164,6 +183,11 @@ Empirica.onGameStart(async ({ game }) => {
     game.set("setIndex", assignment.setIndex);
     game.set("setReplicate", assignment.replicate);
     game.set("setSlotInReplicate", assignment.slotInReplicate);
+    // How many dyads this (condition, set) was asking for when this game
+    // claimed its slot -- 2 normally, 1 or 0 on a backfill schedule. Recorded so
+    // the analysis can tell "this set only ever wanted one more" apart from
+    // "this set was short", which the tally alone cannot distinguish.
+    game.set("setTarget", assignment.setTarget);
 
     selectedSet = await loadSet(condition, assignment.setId);
   } catch (error) {

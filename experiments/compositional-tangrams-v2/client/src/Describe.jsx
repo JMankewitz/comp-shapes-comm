@@ -1,6 +1,22 @@
-import { usePlayer } from "@empirica/core/player/classic/react";
+import { usePlayer, usePlayers } from "@empirica/core/player/classic/react";
 import React, { useEffect, useRef, useState } from "react";
 import { PhaseCard } from "./components/PhaseCard";
+
+// Reuses the game-start bell. This fires at exactly one moment: the participant
+// has answered every item and the study is now waiting on a single click.
+//
+// A dyad was lost this way. Both partners wrote all 20 descriptions; one had 12
+// of theirs autosubmitted by the per-item timer, meaning they were repeatedly
+// away when it fired. Their last item autosubmitted while they were away, the
+// acknowledgement card came up, nobody clicked, and three minutes later the
+// watchdog killed the game as `pretestAbandoned` -- two complete pre-tests
+// thrown away one click short of training.
+//
+// Advancing automatically would be worse, not better: an away participant would
+// be carried into 48 training rounds and take their partner's session with them.
+// The click is the attention check. So make it audible instead of silent.
+const attentionBell = new Audio("bell.mp3");
+attentionBell.volume = 1.0;
 
 // Free-description test phase (design doc S4.3-4.5).
 //
@@ -22,6 +38,16 @@ const PROMPT = "How would you describe this shape to another person?";
 
 export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }) {
   const player = usePlayer();
+  // usePlayers() is only meaningful inside a live game. The post-test runs as an
+  // EXIT STEP after the game has ended, so this can be undefined there -- the
+  // hook still has to be called unconditionally, hence the guards rather than a
+  // conditional call. Only the pre-test has a partner to wait on at all.
+  const players = usePlayers();
+  const partner = (players || []).find((p) => p && p.id !== player.id);
+  const partnerProgress =
+    phase === "pretest" && partner
+      ? Number(partner.get("pretestProgress") || 0)
+      : null;
 
   const itemsKey = `${phase}Items`;
   const responsesKey = `${phase}Responses`;
@@ -40,6 +66,7 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
   const [idx, setIdx] = useState(firstUnanswered === -1 ? items.length : firstUnanswered);
   const [text, setText] = useState("");
   const [done, setDone] = useState(false);       // reached the end of the list
+  const alerted = useRef(false);
   const submittedKey = `${phase}Submitted`;
   // Player-scoped: refreshing while waiting on a partner must not drop back to
   // the completion card (and let onComplete fire twice).
@@ -100,6 +127,15 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
       setText("");
       return;
     }
+    // { private: true } -- the descriptions stay on this participant's client and
+    // the server, and are NOT synced to their partner. Empirica syncs player
+    // scopes to every client in the game by default (that is what usePlayers()
+    // reads), so without this a participant could read their partner's
+    // descriptions in devtools WHILE WRITING THEIR OWN. DV5 is partner
+    // alignment; that is the one thing that must not leak.
+    //
+    // It also cuts traffic: this array is re-sent on every submission, so it was
+    // being pushed to two clients instead of one, growing with each item.
     player.set(responsesKey, [
       ...prior,
       {
@@ -116,7 +152,14 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
         // the participant did not choose to submit.
         autoSubmitted: auto,
       },
-    ]);
+    ], { private: true });
+
+    // Pre-test only, and deliberately NOT private: a bare count is what the
+    // waiting partner sees. The post-test runs as an exit step after the game
+    // has ended, so there is no partner to sync to and no one to read it.
+    if (phase === "pretest") {
+      player.set("pretestProgress", prior.length + 1);
+    }
 
     if (idx + 1 >= items.length) {
       setDone(true); // ack card next; onComplete fires when they click through
@@ -139,6 +182,42 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
   useEffect(() => {
     if (items.length && idx >= items.length && !done) setDone(true);
   }, [idx, items.length, done]);
+
+  // The participant has finished every item and the study is waiting on one
+  // click. If they are on another tab -- which is exactly the state that loses
+  // dyads here -- nothing on this page can reach them, so ring the bell AND
+  // flash the tab title, which is visible without switching windows.
+  //
+  // Fires once per phase (`alerted`), and only while the tab is hidden or until
+  // they come back. Autoplay may be blocked if the participant never interacted
+  // with the page, hence the catch; by this point they have typed 20 answers, so
+  // the gesture requirement is satisfied in practice.
+  useEffect(() => {
+    if (!done || submitted || alerted.current) return;
+    alerted.current = true;
+
+    attentionBell.play().catch(() => {});
+
+    const original = document.title;
+    let on = false;
+    const flash = setInterval(() => {
+      on = !on;
+      document.title = on ? "\u25CF Your turn \u2014 click to continue" : original;
+    }, 1000);
+    const stop = () => {
+      clearInterval(flash);
+      document.title = original;
+    };
+    // Any sign they are back: focus, or the tab becoming visible again.
+    window.addEventListener("focus", stop, { once: true });
+    document.addEventListener("visibilitychange", function vis() {
+      if (!document.hidden) {
+        document.removeEventListener("visibilitychange", vis);
+        stop();
+      }
+    });
+    return stop;
+  }, [done, submitted]);
 
   const finish = () => {
     setSubmitted(true);
@@ -163,19 +242,48 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
           {doneMessage ||
             "Your partner is still working through their own shapes. The next part will begin automatically as soon as they finish."}
         </p>
+        {/* A live count of the partner's progress. The complaint this answers is
+            not "the wait is long" but "I cannot tell a slow partner from a
+            broken study" -- a number that moves distinguishes them at a glance.
+            Only the COUNT crosses between clients, never the descriptions. */}
+        {partnerProgress !== null ? (
+          <div className="mt-2 mb-1">
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>Your partner&rsquo;s progress</span>
+              <span className="tabular-nums font-medium">
+                {partnerProgress} / {items.length}
+              </span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                style={{
+                  width: `${Math.min(100, (partnerProgress / Math.max(1, items.length)) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
         <p className="text-sm text-gray-500">
-          You do not need to do anything — please keep this tab open. This usually
-          takes a minute or two.
+          You do not need to do anything — please keep this tab open. Most people
+          finish within a few minutes of each other, but a partner who is taking
+          their time can take up to about twenty minutes. You are being paid for
+          this waiting time.
         </p>
         {/* Two pilot participants waited 30 and 45 minutes here before giving up,
             because nothing on screen said the wait was bounded. The server-side
-            watchdog now ends the game if a partner goes silent, but saying so
-            matters as much as doing it: people return studies when they cannot
-            tell a slow wait from a broken one. */}
+            watchdog ends the game if a partner goes SILENT for three minutes --
+            but it deliberately does not fire for a partner who is simply slow,
+            because each new answer resets the timer and that is not abandonment.
+            The old copy promised "a few minutes" for both cases, so a participant
+            waiting on a slow partner was told something plainly untrue: the
+            pre-test is 20 items at up to 60s each, so an active partner can take
+            20 minutes. One participant messaged after 10, having been told it
+            would be a few. Name the real bound, and say the wait is paid. */}
         <p className="text-sm text-gray-500">
-          If your partner has left, this will end on its own within a few minutes
-          and you will still be paid for the work you have done. You do not need to
-          message us or return the study.
+          If your partner has stopped altogether, this ends on its own within a
+          few minutes and you will still be paid for the work you have done. You
+          do not need to message us or return the study.
         </p>
       </PhaseCard>
     );

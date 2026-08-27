@@ -36,13 +36,39 @@ export function Game() {
     }
   }, [round?.get("justStarted")]);
 
+  // ---- Phase-handoff instrumentation --------------------------------------
+  // Two pilot dyads were lost to players who never rendered a single training
+  // round: one finished the whole pre-test and vanished at the handoff, one
+  // produced no descriptions at all yet still reached the exit survey. In the
+  // export both look identical to "quit during training", which is a completely
+  // different problem with a completely different fix.
+  //
+  // These four timestamps make the handoff legible. Absence is the signal:
+  // cardShown but no started -> stuck on the Part 1 card; started but no
+  // submitted -> stuck inside the description list; submitted but no
+  // trainingStartedAt (set in Task.jsx) -> stuck at the pre-test/training
+  // boundary. Written on the PLAYER scope so they survive the round change.
+  //
+  // Declared before the phase branch below: hooks cannot live after an early
+  // return, and the pretest branch returns.
+  const phase = round?.get("phase");
+  const pretestStarted = player?.get("pretestStarted");
+  useEffect(() => {
+    if (phase !== "pretest" || !player) return;
+    if (!player.get("pretestCardShownAt")) {
+      player.set("pretestCardShownAt", Date.now());
+    }
+    if (pretestStarted && !player.get("pretestStartedAt")) {
+      player.set("pretestStartedAt", Date.now());
+    }
+  }, [phase, pretestStarted]);
+
   // Pre/post are solo free-description phases: no partner interaction at all.
   // The Chat pane is UNMOUNTED rather than hidden, so no chat attribute is ever
   // created on those rounds and nothing can be typed to a partner (S4.3).
   // Only the PRE-test runs inside the game. The post-test moved to exitSteps
   // (intro-exit/Posttest.jsx) so a participant who finishes first can leave
   // rather than waiting on their partner.
-  const phase = round?.get("phase");
   if (phase === "pretest") {
     // Player-scoped, not local state: a refresh mid-phase should resume the task,
     // not make them click through the intro again.
@@ -78,7 +104,10 @@ export function Game() {
           <Describe
             phase="pretest"
             secondsPerItem={game?.get("describeSecondsPerItem") || 60}
-            onComplete={() => player.stage.set("submit", true)}
+            onComplete={() => {
+              player.set("pretestSubmittedAt", Date.now());
+              player.stage.set("submit", true);
+            }}
             doneMessage="Waiting for your partner to finish theirs. The game will begin automatically."
           />
         </div>

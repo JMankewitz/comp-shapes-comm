@@ -77,14 +77,46 @@ async function loadJSON(filename) {
   return _fileCache.get(filename);
 }
 
+// exp2-schedule-2 adds the optional per-(condition, set) `targets` map. Both are
+// accepted: a v1 schedule has no targets and behaves exactly as before. The
+// version is bumped rather than the field simply added so the failure is LOUD in
+// the other direction -- a v2 schedule served by an old bundle throws here
+// instead of silently ignoring the targets and over-recruiting finished sets.
+const SUPPORTED_SCHEDULE_VERSIONS = ["exp2-schedule-1", "exp2-schedule-2"];
+
 export async function loadSchedule() {
   const schedule = await loadJSON(SCHEDULE_FILE);
-  if (schedule.schema_version !== "exp2-schedule-1") {
+  if (!SUPPORTED_SCHEDULE_VERSIONS.includes(schedule.schema_version)) {
     throw new Error(
-      `${SCHEDULE_FILE}: unexpected schema_version ${schedule.schema_version}`
+      `${SCHEDULE_FILE}: unexpected schema_version ${schedule.schema_version} ` +
+      `(supported: ${SUPPORTED_SCHEDULE_VERSIONS.join(", ")})`
     );
   }
   return schedule;
+}
+
+/**
+ * How many dyads this condition still wants on this set.
+ *
+ * Defaults to the flat `dyads_per_condition_per_set` (2). An optional
+ * `targets` map overrides it per condition and set:
+ *
+ *   "targets": { "comp-between": { "3": 1, "5": 0 } }
+ *
+ * This is what makes backfill expressible. A set that lost a dyad to a timeout,
+ * or whose second dyad was excluded post hoc for AI use, needs exactly ONE more
+ * dyad -- not two, and not zero. A finished set is written as 0 so it can stay
+ * listed in set_ids (keeping set_index stable) without attracting new dyads.
+ *
+ * Keys are strings in JSON; set ids are numbers. Look up both.
+ */
+export function targetFor(schedule, condition, setId) {
+  const byCondition = schedule.targets && schedule.targets[condition];
+  if (byCondition) {
+    const t = byCondition[setId] ?? byCondition[String(setId)];
+    if (typeof t === "number" && Number.isFinite(t) && t >= 0) return t;
+  }
+  return schedule.dyads_per_condition_per_set;
 }
 
 export async function loadSet(condition, setId) {
@@ -134,7 +166,7 @@ function conditionCounts(allTallies, condition, setIds) {
 export function assignSet(game, schedule, globals) {
   const condition = game.get("contextStructure");
   const setIds = schedule.set_ids;
-  const perSet = schedule.dyads_per_condition_per_set;
+  const targetOf = (sid) => targetFor(schedule, condition, sid);
 
   if (!globals) {
     // Never fail silently here: without the tally every dyad gets set 0 and the
@@ -161,17 +193,28 @@ export function assignSet(game, schedule, globals) {
   // Depth-first makes the allocation robust to the pool being larger than the
   // run: every completed prefix of the run maximises complete pairs, and the
   // final tally is identical once the run fills.
-  let chosen = setIds.find((sid) => counts[sid] < perSet);
+  let chosen = setIds.find((sid) => counts[sid] < targetOf(sid));
 
-  // Every set full: wrap. Fall back to least-filled so the extra dyads spread
-  // evenly rather than piling onto set 0.
+  // Every set has met its target: wrap rather than turn arrivals away.
+  //
+  // Wrap only onto sets that WANT dyads at all (target > 0). A set zeroed out
+  // because it is finished must not quietly collect surplus dyads -- that is the
+  // whole point of being able to write 0. Among the wanted sets take the
+  // least-filled, so extras spread instead of piling onto the first one.
   if (chosen === undefined) {
-    chosen = setIds[0];
-    for (const sid of setIds) {
+    const wanted = setIds.filter((sid) => targetOf(sid) > 0);
+    // If literally nothing is wanted the run is complete; still never fail a
+    // live game -- fall back to the full list, matching pre-targets behaviour.
+    const pool = wanted.length ? wanted : setIds;
+    chosen = pool[0];
+    for (const sid of pool) {
       if (counts[sid] < counts[chosen]) chosen = sid;
     }
   }
   const priorDyads = counts[chosen];
+  const chosenTarget = targetOf(chosen);
+  // A zeroed set reached only via the fallback above would divide by zero.
+  const replicateDenom = Math.max(1, chosenTarget);
 
   // Claim the slot immediately -- the next game must see this.
   globals.set(TALLY_KEY, {
@@ -182,10 +225,11 @@ export function assignSet(game, schedule, globals) {
   return {
     setId: chosen,
     setIndex: setIds.indexOf(chosen),
-    replicate: Math.floor(priorDyads / perSet), // 0 = the primary pair, 1+ = wrap
-    slotInReplicate: priorDyads % perSet,
+    setTarget: chosenTarget, // what this (condition, set) was asking for
+    replicate: Math.floor(priorDyads / replicateDenom), // 0 = primary pair, 1+ = wrap
+    slotInReplicate: priorDyads % replicateDenom,
     priorDyadsOnSet: priorDyads,
-    wrapped: priorDyads >= perSet,
+    wrapped: priorDyads >= chosenTarget,
     tallyAfterClaim: { ...counts, [chosen]: priorDyads + 1 },
   };
 }
