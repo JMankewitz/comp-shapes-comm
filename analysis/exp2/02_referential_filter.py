@@ -198,27 +198,47 @@ def build_prompt(batch_texts, shots):
     return "\n".join(lines)
 
 
-def sample_shots(gold, n=16, seed=0):
-    """Few-shot examples drawn from Jess's own labels.
+FEWSHOT_FILE = os.path.join(HERE, "fewshot_examples.csv")
 
-    Hand-written examples would encode my reading of the boundary; these encode
-    hers. Balanced across the two classes and biased toward SHORT messages, where
-    the boundary actually lives -- a 15-word shape description is never the hard
-    case.
+
+def sample_shots(gold=None, n=16, seed=0):
+    """Few-shot examples encoding Jess's boundary, not the prompt author's.
+
+    Source order:
+      1. A gold frame, when one is passed (validation runs have Exp 1 loaded).
+      2. `fewshot_examples.csv` -- 240 balanced examples distilled from the Exp 1
+         hand labels and COMMITTED alongside this script.
+
+    (2) exists because the cluster sparse-checkout is `analysis/exp2` +
+    `data/processed_data/exp_2`; Exp 1 is 219 MB and is not there. Without a
+    committed pool, `sample_shots` silently returned [] on the cluster and the
+    classifier ran with NO examples -- a materially weaker configuration than
+    anything tested locally, and one that fails on inputs as easy as "hi".
+
+    Biased toward SHORT messages: the boundary lives there, not in 15-word
+    descriptions.
     """
-    if gold is None or not len(gold):
-        return []
     rng = random.Random(seed)
-    out = []
-    for lab, want in (("FILLER", True), ("REFERENTIAL", False)):
-        pool = gold[gold["chit_chat_gold"] == want]
-        pool = pool[pool["text"].str.len() <= 60]
-        if not len(pool):
-            continue
-        picks = rng.sample(list(pool["text"].unique()), min(n // 2, pool["text"].nunique()))
-        out += [(t, lab) for t in picks]
-    rng.shuffle(out)
-    return out
+    pairs = []
+    if gold is not None and len(gold):
+        for lab, want in (("FILLER", True), ("REFERENTIAL", False)):
+            pool = gold[gold["chit_chat_gold"] == want]
+            pool = pool[pool["text"].str.len() <= 60]
+            if len(pool):
+                picks = rng.sample(list(pool["text"].unique()),
+                                   min(n // 2, pool["text"].nunique()))
+                pairs += [(t, lab) for t in picks]
+    elif os.path.exists(FEWSHOT_FILE):
+        pool = pd.read_csv(FEWSHOT_FILE)
+        for lab in ("FILLER", "REFERENTIAL"):
+            texts = pool.loc[pool["label"] == lab, "text"].dropna().tolist()
+            picks = rng.sample(texts, min(n // 2, len(texts)))
+            pairs += [(t, lab) for t in picks]
+    if not pairs:
+        print("  WARNING: no few-shot examples available. The classifier is much "
+              "weaker without them -- check that fewshot_examples.csv shipped.")
+    rng.shuffle(pairs)
+    return pairs
 
 
 def llm_label(texts, cfg, shots, batch_size=32):
@@ -363,24 +383,30 @@ SELF_TEST = [
 
 
 def self_test(cfg, batch_size):
-    """Nine hand-picked cases spanning the boundary, printed with verdicts.
+    """Boundary cases run through the REAL pipeline, printed with verdicts.
 
-    Worth thirty seconds before committing a GPU job. A model too small for this
+    Worth ninety seconds before committing a GPU job: a model too small for this
     task answers REFERENTIAL to everything, which produces a plausible-looking
-    output file ("only 2% was filler") rather than an error. This makes that
-    failure obvious. The two positional items are the discriminating ones:
-    screen position is FILLER, position within the shape is REFERENTIAL.
+    output file ("only 2% was filler") rather than an error.
+
+    Goes through `classify()` -- rules first, then the model with few-shot
+    examples -- because an earlier version called the model directly with no
+    examples and no rules. That scored a 3B model at 6/11 and failed on "hi",
+    which measured the harness rather than the model. Test what will run.
     """
-    texts = [t for t, _ in SELF_TEST]
+    df = pd.DataFrame({"text": [t for t, _ in SELF_TEST]})
     gold = [g for _, g in SELF_TEST]
-    pred = llm_label(texts, cfg, sample_shots(None), batch_size=batch_size)
+    res = classify(df, cfg, use_llm=True, batch_size=batch_size)
+    pred = res.set_index("text").loc[df["text"], "chit_chat"].astype(bool).tolist()
+    texts = df["text"].tolist()
     ok = sum(p == g for p, g in zip(pred, gold))
     print(f"\n  self-test: {ok}/{len(gold)} correct\n")
-    for t, g, p in zip(texts, gold, pred):
+    by = res.set_index("text").loc[texts, "method"].tolist()
+    for t, g, p, m in zip(texts, gold, pred, by):
         mark = "ok  " if p == g else "MISS"
         print(f"    {mark} pred={'FILLER' if p else 'REFERENTIAL':12} "
-              f"gold={'FILLER' if g else 'REFERENTIAL':12} {t}")
-    if ok < 7:
+              f"gold={'FILLER' if g else 'REFERENTIAL':12} [{m:4}] {t}")
+    if ok < len(gold) - 2:
         print("\n  This model is not reliable enough for the full run.")
     return ok
 
