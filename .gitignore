@@ -160,3 +160,15 @@ stimuli/generate_tangrams/outputs/checkpoints/
 experiments/*/compShapesV1-*.zip
 data/chat_data/chat_pairwise_similarities.csv
 data/processed_data/exp_1/message_similarities.csv
+
+# R session state -- large, machine-local, regenerable
+.RData
+.RDataTmp
+.Rproj.user/
+
+# Derived embedding artefacts. Regenerable from processed_data by
+# analysis/exp2/02_build_corpus.py + 03_embed.py; ~220 MB of float32 at full
+# study size, and obsolete the moment the encoder changes. The similarity pair
+# tables under it are small but equally regenerable.
+data/embeddings/
+__pycache__/

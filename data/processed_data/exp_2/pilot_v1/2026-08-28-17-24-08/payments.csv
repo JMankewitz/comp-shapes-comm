@@ -1,0 +1,38 @@
+prolificID,amount,group,action,minutes,pretest,posttest,category,already_paid,contextStructure,gameID
+6630f2a2c5912d7f4d93938b,0,abandoned,no payment -- left during the quiz,15.9,0,0,none,FALSE,NA,01M0XF36KWD2V63CQAR2NCREVC
+6a1759a83da9f4ed875b332d,1.32,data,approve ($11.00) + bonus,78.9,20,20,bonus,TRUE,comp-between,01M0XF36KPEANMAA2FHR330CGB
+66929a6a268ccf0d6fce0d52,0.99,data,approve ($11.00) + bonus,74.2,20,20,bonus,TRUE,comp-within,01M0XEBKS0ZEFNX9SMQDQW2PZ4
+67ddbba0fa5e1ce984f9fb87,1.05,data,approve ($11.00) + bonus,73.1,20,20,bonus,TRUE,comp-within,01M0XEBHFAZN8J8K9QJ4PMADCV
+6a1692f9cd2b008d1f661d7e,1.32,data,approve ($11.00) + bonus,66.4,20,20,bonus,TRUE,comp-between,01M0XF36KPEANMAA2FHR330CGB
+5c97e0fdf74b3500152c1608,1.05,data,approve ($11.00) + bonus,65.6,20,20,bonus,TRUE,comp-within,01M0XEBHFAZN8J8K9QJ4PMADCV
+63d7b1a77e23b5460ab88069,0.99,data,approve ($11.00) + bonus,63.7,20,20,bonus,TRUE,comp-within,01M0XEBKS0ZEFNX9SMQDQW2PZ4
+69e544b78967c6b1c14d2035@email.prolific.com,1.2,data,approve ($11.00) + bonus,55.5,8,20,bonus,TRUE,noncomp,01M0XEP3TXK5Z02SVJR2VASG8P
+67803b5508f3d995ef13696b,0.96,data,approve ($11.00) + bonus,55.1,20,20,bonus,TRUE,comp-between,01M0XEP3TSE5MTCHYTC004C3XD
+6328ddce9adceb215c2334ee,1.29,data,approve ($11.00) + bonus,54.3,20,20,bonus,TRUE,comp-between,01M0XEBHFGJ74MNH9PTVJNK0S2
+6a06233ac83a1d709b365e59,1.23,data,approve ($11.00) + bonus,50.5,20,20,bonus,TRUE,comp-within,01M0XEP3V3T2RJX1S58T7Z1N3B
+6a1b5c3118af715c312efcc9,1.23,data,approve ($11.00) + bonus,48.9,20,20,bonus,TRUE,comp-within,01M0XEP3V3T2RJX1S58T7Z1N3B
+6156fef09d1ab07148870099,1.29,data,approve ($11.00) + bonus,46.8,20,20,bonus,TRUE,comp-between,01M0XEBHFGJ74MNH9PTVJNK0S2
+6a1cc036937e109155f17cb1,0.96,data,approve ($11.00) + bonus,46.3,20,20,bonus,TRUE,comp-between,01M0XEP3TSE5MTCHYTC004C3XD
+6658b1491e88ec15902d5301,1.29,data,approve ($11.00) + bonus,43.8,20,20,bonus,TRUE,comp-within,01M0XEBFZ0825AFF4R333DJ4HK
+69ab8364e157c061ca63d825,1.35,data,approve ($11.00) + bonus,43.8,20,20,bonus,TRUE,comp-between,01M0XEBJH4G5D0NKPXZ6BYKGS7
+5c3fa8f562ada90001275f5e,1.35,data,approve ($11.00) + bonus,43.7,20,20,bonus,TRUE,comp-between,01M0XEBJH4G5D0NKPXZ6BYKGS7
+69137ce487ad8fc2193bcb12,1.38,data,approve ($11.00) + bonus,42.9,8,20,bonus,TRUE,noncomp,01M0XEBKS2G948HDY26TVYK1X9
+6a18c85d8319b40bb23e78c9,1.29,data,approve ($11.00) + bonus,42.5,20,20,bonus,TRUE,comp-within,01M0XEBFZ0825AFF4R333DJ4HK
+664df048885a07d315d9236e,0.87,data,approve ($11.00) + bonus,42.4,20,0,bonus,TRUE,comp-within,01M0XEBJH722J4730WC5V8GCA8
+667db9548bb4a257a3bc04fc,1.2,data,approve ($11.00) + bonus,41.7,8,20,bonus,TRUE,noncomp,01M0XEP3TXK5Z02SVJR2VASG8P
+55a7ff69fdf99b7508d7da5a,0.87,data,approve ($11.00) + bonus,41,20,0,bonus,TRUE,comp-within,01M0XEBJH722J4730WC5V8GCA8
+6a01521c28d64ac367f8fa55,1.38,data,approve ($11.00) + bonus,39.8,8,20,bonus,TRUE,noncomp,01M0XEBKS2G948HDY26TVYK1X9
+627a76b96bea55210aecbba9,1.38,data,approve ($11.00) + bonus,39.4,8,20,bonus,TRUE,noncomp,01M0XEBHF9Z6MD8PTP8NQ2PV26
+6143af8721d1445864c4f6c8,1.38,data,approve ($11.00) + bonus,38.4,8,20,bonus,TRUE,noncomp,01M0XEBHF9Z6MD8PTP8NQ2PV26
+6a0aca55e6a25f8ce99ddc7c,1.38,data,approve ($11.00) + bonus,38,20,20,bonus,TRUE,comp-between,01M0XEBFYW1G5QWYVD4F1CEJQ3
+69fc82781ffa298db04922fd,0,data,approve ($11.00) + bonus,36.7,20,0,bonus,FALSE,comp-between,01M0XEBKS0ZEFNX9SMQQNF9DE2
+6a1eba8c12fabb0fa7678822,1.38,data,approve ($11.00) + bonus,36.6,20,20,bonus,TRUE,comp-between,01M0XEBFYW1G5QWYVD4F1CEJQ3
+65055af809999c0ee7cee26d,1.2,data,approve ($11.00) + bonus,34,8,20,bonus,TRUE,noncomp,01M0XEBJH60M51NVP8EGS7231S
+662d7fba32d6a738b194d893,1.35,data,approve ($11.00) + bonus,33.7,8,20,bonus,TRUE,noncomp,01M0XEBFYZ40VDCCZ70PM6EWHK
+66cdfebcb908ea2717d06b6c,1.35,data,approve ($11.00) + bonus,33.2,8,20,bonus,TRUE,noncomp,01M0XEBFYZ40VDCCZ70PM6EWHK
+6446839f023ba8de55365437,1.2,data,approve ($11.00) + bonus,30.2,8,20,bonus,TRUE,noncomp,01M0XEBJH60M51NVP8EGS7231S
+67d94f701307ac0887c44909,0,data,approve ($11.00) + bonus,29,20,0,bonus,FALSE,comp-between,01M0XEBKS0ZEFNX9SMQQNF9DE2
+6551469abe377d3646c6cd6e,2.5,lobby,pay lobby $2.50 -- no partner,11,0,0,lobby,TRUE,NA,01M0XF36M6BHF932A0YJY07K5X
+667439c6372889c378fc8bdb,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",12,0,0,no_lobby,TRUE,NA,null
+664538d42f1f1e3371e3e3db,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",11.6,0,0,no_lobby,TRUE,NA,null
+69fcd499fd111c8f70a1a41a,1,no_lobby,"pay $1.00, ask to RETURN -- no lobby",2.6,0,0,no_lobby,TRUE,NA,null

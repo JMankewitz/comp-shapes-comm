@@ -1,0 +1,14 @@
+# Exp 2 embedding / similarity pipeline.
+#
+# sentence-transformers >= 4.1 and transformers >= 4.51 are REQUIRED for
+# Qwen3-Embedding: it uses last-token pooling with left padding, which older
+# releases load silently but pool incorrectly -- you get vectors, they are just
+# wrong. The laptop env (coshapes_310) has ST 3.3.1 and can only run the
+# MiniLM robustness pass.
+sentence-transformers>=4.1
+transformers>=4.51
+torch>=2.1
+numpy>=1.24
+pandas>=2.0
+pyarrow>=14
+pyyaml>=6.0

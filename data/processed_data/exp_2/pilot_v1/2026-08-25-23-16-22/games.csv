@@ -1,0 +1,19 @@
+gameID,batchID,contextStructure,contextSize,status,setId,setIndex,setReplicate,setSlotInReplicate,compSetId,rotation,numPretestItems,numPosttestItems,describeSecondsPerItem,stimulusSchemaVersion,trainingLabels,endedInactive,trainingRoundsCompleted,trainingRoundsExpected,endedReason
+01M0XEP3V3T2RJX1S58T7Z1N3B,01M0XEP3T70NKH60H2S695DMN6,comp-within,4,ended,3,2,0,0,3,270,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XEBFYW1G5QWYVD4F1CEJQ3,01M0XEBFY4YXS87RM6X2Q5749J,comp-between,4,ended,1,0,0,0,1,90,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XEBHFGJ74MNH9PTVJNK0S2,01M0XEBHET4KVX92X8B5Q34QJ0,comp-between,4,ended,1,0,0,1,1,90,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XEBKS0ZEFNX9SMQDQW2PZ4,01M0XEBKRKE50WHHFQ8N1HZJSG,comp-within,4,ended,2,1,0,1,2,180,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XEBKS2G948HDY26TVYK1X9,01M0XEBKRKE50WHHFQ8N1HZJSG,noncomp,4,ended,2,1,0,1,2,180,8,20,60,exp2-1,"[""A1"",""B2"",""C3"",""D4"",""F1"",""F2"",""F3"",""F4"",""F5"",""F6"",""F7"",""F8""]",FALSE,48,48,end of game
+01M0XF36KWD2V63CQAR2NCREVC,01M0XF36JXW4D63HCADH1D9G7E,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+01M0XEBFYZ40VDCCZ70PM6EWHK,01M0XEBFY4YXS87RM6X2Q5749J,noncomp,4,ended,1,0,0,0,1,90,8,20,60,exp2-1,"[""A1"",""B2"",""C3"",""D4"",""F1"",""F2"",""F3"",""F4"",""F5"",""F6"",""F7"",""F8""]",FALSE,48,48,end of game
+01M0XEBJH4G5D0NKPXZ6BYKGS7,01M0XEBJGR25DCPR4CYRJ00CPT,comp-between,4,ended,2,1,0,0,2,180,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XEBJH60M51NVP8EGS7231S,01M0XEBJGR25DCPR4CYRJ00CPT,noncomp,4,ended,2,1,0,0,2,180,8,20,60,exp2-1,"[""A1"",""B2"",""C3"",""D4"",""F1"",""F2"",""F3"",""F4"",""F5"",""F6"",""F7"",""F8""]",FALSE,48,48,end of game
+01M0XEP3TXK5Z02SVJR2VASG8P,01M0XEP3T70NKH60H2S695DMN6,noncomp,4,ended,3,2,0,0,3,270,8,20,60,exp2-1,"[""A1"",""B2"",""C3"",""D4"",""F1"",""F2"",""F3"",""F4"",""F5"",""F6"",""F7"",""F8""]",FALSE,48,48,end of game
+01M0XF36M6BHF932A0YJY07K5X,01M0XF36JXW4D63HCADH1D9G7E,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+01M0XEBHFAZN8J8K9QJ4PMADCV,01M0XEBHET4KVX92X8B5Q34QJ0,comp-within,4,ended,1,0,0,1,1,90,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XEBKS0ZEFNX9SMQQNF9DE2,01M0XEBKRKE50WHHFQ8N1HZJSG,comp-between,4,ended,2,1,0,1,2,180,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",TRUE,NA,48,pretestAbandoned
+01M0XEP3TSE5MTCHYTC004C3XD,01M0XEP3T70NKH60H2S695DMN6,comp-between,4,ended,3,2,0,0,3,270,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XF36KPEANMAA2FHR330CGB,01M0XF36JXW4D63HCADH1D9G7E,comp-between,4,ended,3,2,0,1,3,270,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XEBFZ0825AFF4R333DJ4HK,01M0XEBFY4YXS87RM6X2Q5749J,comp-within,4,ended,1,0,0,0,1,90,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",FALSE,48,48,end of game
+01M0XEBHF9Z6MD8PTP8NQ2PV26,01M0XEBHET4KVX92X8B5Q34QJ0,noncomp,4,ended,1,0,0,1,1,90,8,20,60,exp2-1,"[""A1"",""B2"",""C3"",""D4"",""F1"",""F2"",""F3"",""F4"",""F5"",""F6"",""F7"",""F8""]",FALSE,48,48,end of game
+01M0XEBJH722J4730WC5V8GCA8,01M0XEBJGR25DCPR4CYRJ00CPT,comp-within,4,ended,2,1,0,0,2,180,20,20,60,exp2-1,"[""A2"",""A3"",""A4"",""B1"",""B3"",""B4"",""C1"",""C2"",""C4"",""D1"",""D2"",""D3""]",TRUE,39,48,timeOut

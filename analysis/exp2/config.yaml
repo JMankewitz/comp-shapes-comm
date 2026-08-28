@@ -1,0 +1,59 @@
+# Exp 2 embedding / similarity pipeline configuration.
+#
+# Paths are relative to the repo root. The scripts resolve the repo from their
+# own location, so they can be run from anywhere (laptop or /nlp/scr/jmank).
+
+paths:
+  processed: "data/processed_data/exp_2"
+  excluded_games: "data/processed_data/exp_2/excluded_games.csv"
+  # Derived artefacts. Gitignored -- regenerable from processed_data, and the
+  # embedding matrix alone is ~220 MB at full study size.
+  out: "data/embeddings/exp_2"
+
+corpus:
+  # Which processed run folders to pool. null = every folder containing a
+  # games.csv under `processed`. Coverage is deduplicated by ULID, so
+  # overlapping re-exports are safe.
+  runs: null
+  # Texts per shard. Embedding is fast; this exists so a dead job resumes at a
+  # shard boundary rather than from zero, and so shards can be split across
+  # parallel nlprun jobs.
+  texts_per_shard: 2000
+
+referential:
+  # Local instruct model for the messages the rules cannot decide. Runs on the
+  # cluster GPU; same shape as the social-games annotation pipeline. Few-shot
+  # examples are drawn from Exp 1's hand labels at runtime, so the operative
+  # boundary is Jess's, not the prompt author's.
+  model: "google/gemma-2-9b-it"
+  batch_size: 32
+
+embedding:
+  # Qwen3-Embedding-0.6B: sentence-transformers native, 1024-dim, strong on MTEB
+  # for its size, and small enough that a full-study corpus embeds in minutes on
+  # one GPU. all-MiniLM-L6-v2 (384-dim) is kept as the cheap robustness check --
+  # "conclusions unchanged under a 22M and a 600M encoder" is worth a sentence.
+  model: "Qwen/Qwen3-Embedding-0.6B"
+  # NO instruction prefix. Qwen3 takes an instruction for ASYMMETRIC retrieval
+  # (query vs document); every comparison here is description-to-description,
+  # so an instruction on one side would bake a retrieval asymmetry into a
+  # symmetric measure. Left null deliberately -- do not "improve" this.
+  prompt_name: null
+  batch_size: 64
+  # float32 on disk. float16 halves the file but costs ~1e-3 on cosine, which is
+  # the same order as the effects being measured in the novel-combination cell.
+  dtype: "float32"
+  normalize: true
+
+similarity:
+  # Pair tables materialised by 05_similarity.py. The full cross product is
+  # 1.46 billion pairs at full-study size (17.5 GB even in parquet) and almost
+  # all of it is meaningless -- one dyad's description of shape A against
+  # another's of shape Z. These are the structured subsets the analyses use.
+  # See analysis/exp2/CLUSTER.md for what each one answers.
+  tables:
+    - within_dyad_same_target   # conventionalisation across blocks
+    - within_block              # systematicity within a block
+    - partner_alignment         # DV5: partners on the same item, per phase
+    - between_dyad_same_item    # DV6: the chance level, from the S4.8 replicate
+    - pre_post                  # DV1: same person, same item, across phases
