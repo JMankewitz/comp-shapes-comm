@@ -241,10 +241,50 @@ def sample_shots(gold=None, n=16, seed=0):
     return pairs
 
 
-def llm_label(texts, cfg, shots, batch_size=32):
-    """Label texts with a local instruct model. Returns list of bools (True=filler)."""
+def cache_path(cfg, model_id):
+    """Where partial labels live. Keyed by MODEL -- a different model is a
+    different labelling, and silently reusing another model's decisions would be
+    invisible in the output."""
+    out = os.path.join(REPO, cfg["paths"]["out"])
+    os.makedirs(out, exist_ok=True)
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", model_id).strip("-")
+    return os.path.join(out, f"llm_labels_{slug}.parquet")
+
+
+def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10):
+    """Label texts with a local instruct model. Returns list of bools (True=filler).
+
+    RESUMABLE. Partial results are flushed to `cache_file` every `flush_every`
+    batches and reloaded on the next run, because the low-priority queue preempts:
+    a validate pass is ~475 model calls, and losing all of it to a SIGTERM at 90%
+    is the difference between a coffee break and an afternoon.
+    """
     from transformers import AutoModelForCausalLM, AutoTokenizer
     import torch
+
+    done = {}
+    if cache_file and os.path.exists(cache_file):
+        try:
+            prev = pd.read_parquet(cache_file)
+            done = dict(zip(prev["text"], prev["chit_chat"].astype(bool)))
+            print(f"  resuming: {len(done):,} label(s) already cached")
+        except Exception as e:
+            print(f"  ignoring unreadable cache {cache_file}: {e}")
+
+    todo = [t for t in texts if t not in done]
+    if not todo:
+        print("  every text already labelled from cache; no model needed")
+        return [done[t] for t in texts]
+    if len(todo) < len(texts):
+        print(f"  {len(todo):,} of {len(texts):,} still need the model")
+
+    def flush():
+        if not cache_file:
+            return
+        pd.DataFrame({"text": list(done.keys()),
+                      "chit_chat": list(done.values())}).to_parquet(
+            cache_file + ".tmp", index=False)
+        os.replace(cache_file + ".tmp", cache_file)
 
     model_id = cfg["referential"]["model"]
     print(f"  loading {model_id} ...")
@@ -264,10 +304,26 @@ def llm_label(texts, cfg, shots, batch_size=32):
         dtype = torch.bfloat16 if major >= 8 else torch.float16
         print(f"  GPU: {name} (CC {major}.{minor}) -> "
               f"{'bfloat16' if dtype is torch.bfloat16 else 'float16'}")
+
+        # Fail BEFORE loading weights. A torch built for CUDA 13 carries no
+        # kernels below sm_75, so a job landing on a Volta card (TITAN V, CC 7.0)
+        # loads all 434 shards, then dies in generate() with
+        # `cudaErrorNoKernelImageForDevice`. That wasted ~100s and a GPU slot per
+        # attempt. The arch list is known at import time, so check it up front.
+        arch_list = torch.cuda.get_arch_list()
+        dev_arch = f"sm_{major}{minor}"
+        if arch_list and dev_arch not in arch_list:
+            sys.exit(
+                f"\n  This torch build has no kernels for {name} ({dev_arch}).\n"
+                f"  torch.cuda.get_arch_list() = {arch_list}\n\n"
+                f"  Generation would fail with cudaErrorNoKernelImageForDevice\n"
+                f"  AFTER the weights load. Resubmit onto a newer card, e.g.\n"
+                f"    nlprun ... -x jagupard[10-29] ...\n"
+                f"  or check what each node has:\n"
+                f"    sinfo -o \"%20N %30G\"\n"
+            )
         if major < 8:
-            print(f"  NOTE: pre-Ampere card. float16 works, but if torch was "
-                  f"built without CC {major}.{minor} kernels this will fail at "
-                  f"generation. Request a newer node if it does.")
+            print(f"  NOTE: pre-Ampere card, using float16.")
     else:
         dtype = torch.float32
         print("  no CUDA visible -> float32 on CPU (slow)")
@@ -282,11 +338,10 @@ def llm_label(texts, cfg, shots, batch_size=32):
             model_id, torch_dtype=dtype, device_map="auto")
     model.eval()
 
-    out = []
     short_batches = 0
     n_defaulted = 0
-    for start in range(0, len(texts), batch_size):
-        chunk = texts[start:start + batch_size]
+    for bi, start in enumerate(range(0, len(todo), batch_size)):
+        chunk = todo[start:start + batch_size]
         prompt = build_prompt(chunk, shots)
         msgs = [{"role": "user", "content": prompt}]
         # apply_chat_template's return type is version-dependent: a bare Tensor
@@ -320,9 +375,14 @@ def llm_label(texts, cfg, shots, batch_size=32):
             short_batches += 1
             n_defaulted += len(chunk) - len(labels)
             labels += ["REFERENTIAL"] * (len(chunk) - len(labels))
-        out += [lab == "FILLER" for lab in labels[:len(chunk)]]
-        print(f"    {min(start + batch_size, len(texts))}/{len(texts)}", end="\r")
+        for t, lab in zip(chunk, labels[:len(chunk)]):
+            done[t] = (lab == "FILLER")
+        if (bi + 1) % flush_every == 0:
+            flush()
+        print(f"    {min(start + batch_size, len(todo)):,}/{len(todo):,}", end="\r")
     print()
+    flush()
+    out = [done.get(t, False) for t in texts]
     if short_batches:
         print(f"  WARNING: {short_batches} batch(es) returned fewer labels than "
               f"inputs; {n_defaulted} text(s) defaulted to REFERENTIAL. If this is "
@@ -357,14 +417,17 @@ def classify(df, cfg, use_llm=True, gold_for_shots=None, batch_size=32):
         shots = sample_shots(gold_for_shots)
         print(f"  {len(undecided):,} to the model ({len(shots)} few-shot examples "
               f"drawn from the gold labels)")
-        undecided["llm"] = llm_label(undecided["text"].tolist(), cfg, shots, batch_size)
+        undecided["llm"] = llm_label(undecided["text"].tolist(), cfg, shots,
+                                     batch_size,
+                                     cache_file=cache_path(cfg, cfg["referential"]["model"]))
     else:
         if len(undecided):
             print(f"  {len(undecided):,} undecided -> REFERENTIAL (--no-llm)")
         undecided["llm"] = False
 
     uniq = uniq.merge(undecided[["text", "llm"]], on="text", how="left")
-    uniq["chit_chat"] = uniq["rule"].where(uniq["rule"].notna(), uniq["llm"]).fillna(False)
+    uniq["chit_chat"] = (uniq["rule"].where(uniq["rule"].notna(), uniq["llm"])
+                         .astype("boolean").fillna(False).astype(bool))
     uniq["method"] = uniq["rule"].notna().map({True: "rule", False: "llm"})
     return df.merge(uniq[["text", "chit_chat", "method"]], on="text", how="left")
 

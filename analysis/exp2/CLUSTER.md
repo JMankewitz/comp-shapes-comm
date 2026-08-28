@@ -82,6 +82,36 @@ Rules alone, scored on 37,449 director messages: **precision 0.660, recall 0.322
 Low recall is the point — the rules deliberately punt anything interesting to the
 model.
 
+### Avoid the two Volta nodes in the jag queue
+
+The env's torch is a CUDA 13 build, which carries no kernels below `sm_75`. Two
+`jag` nodes are older than that, and a job landing on one loads all the weights
+and then dies in `generate()` with `cudaErrorNoKernelImageForDevice`:
+
+| Node | GPU | CC | |
+|---|---|---|---|
+| jagupard19, 20 | titanv | 7.0 | **unusable** |
+| jagupard26, 27 | titanrtx | 7.5 | ok |
+| jagupard28, 29 | 3090 | 8.6 | ok |
+| jagupard30, 31 | a5000 | 8.6 | ok |
+| jagupard32–36 | a6000 | 8.6 | ok |
+| jagupard37–39 | rtx6000ada | 8.9 | ok |
+
+Exclude the two rather than pinning a type — it costs almost no availability:
+
+```bash
+nlprun -q jag -g 1 -x jagupard19,jagupard20 -r 60G -c 8 -p low -a compshapes-nlp \
+    'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/02_referential_filter.py --self-test'
+```
+
+`sphinx` is entirely a100/h100/h200 if `jag` is congested. `sinfo -N -o "%N %G" | sort -u`
+lists every node's card; `nlprun --help` has the flags (`-d` requests a GPU type,
+`-m` pins one machine, `-x` excludes a comma-separated list).
+
+The scripts check `torch.cuda.get_arch_list()` against the assigned card and exit
+in seconds with the card name if there is no kernel for it, rather than failing
+after a minute of weight loading.
+
 ### Check the model before spending a GPU job
 
 ```bash
@@ -280,13 +310,34 @@ Pre-fetch the weights here rather than inside a GPU job — downloading 18 GB wh
 holding a GPU wastes the allocation, and gemma is a gated repo, so an
 unauthenticated job fails *after* it has queued and started:
 
+The CLI is `hf`. `huggingface-cli` was removed in `huggingface_hub` >= 0.34 and
+now prints a deprecation notice instead of running.
+
 ```bash
-huggingface-cli login
+hf auth login
+```
+
+Ungated model first: if it succeeds, the cache path and token both work, so any
+failure on gemma is specifically the licence gate rather than setup.
+
+```bash
+hf download Qwen/Qwen3-Embedding-0.6B
 ```
 
 ```bash
-huggingface-cli download google/gemma-2-9b-it && huggingface-cli download Qwen/Qwen3-Embedding-0.6B
+hf download google/gemma-2-9b-it
 ```
+
+⚠️ **gemma-2-9b-it is a GATED repo.** Accept the licence once, signed in, at
+<https://huggingface.co/google/gemma-2-9b-it>. Until then every download and
+every job 401s regardless of the token — and a job discovers this *after* it has
+queued and taken a GPU. `Qwen/Qwen2.5-7B-Instruct` is ungated and comparable at
+this task if you would rather skip the gate; it is a one-line change in
+`config.yaml`, and `--self-test` will tell you in thirty seconds whether the
+substitute holds up.
+
+Both `HF_HOME` and `HF_TOKEN` must be visible to the `nlprun` jobs, which is why
+they go in `~/.bashrc` rather than being exported for one shell.
 
 ### Every subsequent run
 
