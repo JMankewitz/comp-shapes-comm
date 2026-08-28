@@ -252,14 +252,34 @@ def llm_label(texts, cfg, shots, batch_size=32):
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     tok.padding_side = "left"
-    # `torch_dtype` is deprecated in favour of `dtype` in recent transformers,
-    # but older releases do not accept `dtype`. Try the new name, fall back.
+    # Pick the dtype from the ACTUAL card, not a hardcoded guess.
+    #
+    # bfloat16 requires Ampere (compute capability >= 8.0). The jag queue still
+    # contains Volta cards (TITAN V, CC 7.0), where bf16 is unsupported and a
+    # recent torch build may carry no kernels at all -- the job then dies during
+    # generation, long after the weights have loaded and the GPU is committed.
+    if torch.cuda.is_available():
+        major, minor = torch.cuda.get_device_capability()
+        name = torch.cuda.get_device_name(0)
+        dtype = torch.bfloat16 if major >= 8 else torch.float16
+        print(f"  GPU: {name} (CC {major}.{minor}) -> "
+              f"{'bfloat16' if dtype is torch.bfloat16 else 'float16'}")
+        if major < 8:
+            print(f"  NOTE: pre-Ampere card. float16 works, but if torch was "
+                  f"built without CC {major}.{minor} kernels this will fail at "
+                  f"generation. Request a newer node if it does.")
+    else:
+        dtype = torch.float32
+        print("  no CUDA visible -> float32 on CPU (slow)")
+
+    # `torch_dtype` was renamed `dtype` in recent transformers; older releases
+    # only accept the old name.
     try:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, dtype=torch.bfloat16, device_map="auto")
+            model_id, dtype=dtype, device_map="auto")
     except TypeError:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch.bfloat16, device_map="auto")
+            model_id, torch_dtype=dtype, device_map="auto")
     model.eval()
 
     out = []
