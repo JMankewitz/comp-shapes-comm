@@ -60,6 +60,7 @@ import random
 import re
 import sys
 
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -251,7 +252,8 @@ def cache_path(cfg, model_id):
     return os.path.join(out, f"llm_labels_{slug}.parquet")
 
 
-def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10):
+def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
+              threshold=0.5):
     """Label texts with a local instruct model. Returns list of bools (True=filler).
 
     RESUMABLE. Partial results are flushed to `cache_file` every `flush_every`
@@ -266,7 +268,13 @@ def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10)
     if cache_file and os.path.exists(cache_file):
         try:
             prev = pd.read_parquet(cache_file)
-            done = dict(zip(prev["text"], prev["chit_chat"].astype(bool)))
+            # Older caches stored a bool; newer ones store P(filler) so the
+            # threshold can be moved without re-running the model.
+            if "p_filler" in prev.columns:
+                done = dict(zip(prev["text"], prev["p_filler"].astype(float)))
+            else:
+                done = {t: (1.0 if v else 0.0)
+                        for t, v in zip(prev["text"], prev["chit_chat"].astype(bool))}
             print(f"  resuming: {len(done):,} label(s) already cached")
         except Exception as e:
             print(f"  ignoring unreadable cache {cache_file}: {e}")
@@ -274,7 +282,7 @@ def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10)
     todo = [t for t in texts if t not in done]
     if not todo:
         print("  every text already labelled from cache; no model needed")
-        return [done[t] for t in texts]
+        return [done[t] > threshold for t in texts]
     if len(todo) < len(texts):
         print(f"  {len(todo):,} of {len(texts):,} still need the model")
 
@@ -282,70 +290,48 @@ def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10)
         if not cache_file:
             return
         pd.DataFrame({"text": list(done.keys()),
-                      "chit_chat": list(done.values())}).to_parquet(
+                      "p_filler": list(done.values()),
+                      "chit_chat": [v > threshold for v in done.values()]}).to_parquet(
             cache_file + ".tmp", index=False)
         os.replace(cache_file + ".tmp", cache_file)
+
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import torch
 
     model_id = cfg["referential"]["model"]
     print(f"  loading {model_id} ...")
     tok = AutoTokenizer.from_pretrained(model_id)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    tok.padding_side = "left"
-    # Pick the dtype from the ACTUAL card, not a hardcoded guess.
-    #
-    # bfloat16 requires Ampere (compute capability >= 8.0). The jag queue still
-    # contains Volta cards (TITAN V, CC 7.0), where bf16 is unsupported and a
-    # recent torch build may carry no kernels at all -- the job then dies during
-    # generation, long after the weights have loaded and the GPU is committed.
+    tok.padding_side = "left"  # last-position logits must be the true last token
+
     if torch.cuda.is_available():
         major, minor = torch.cuda.get_device_capability()
         name = torch.cuda.get_device_name(0)
         dtype = torch.bfloat16 if major >= 8 else torch.float16
         print(f"  GPU: {name} (CC {major}.{minor}) -> "
               f"{'bfloat16' if dtype is torch.bfloat16 else 'float16'}")
-
-        # Fail BEFORE loading weights. A torch built for CUDA 13 carries no
-        # kernels below sm_75, so a job landing on a Volta card (TITAN V, CC 7.0)
-        # loads all 434 shards, then dies in generate() with
-        # `cudaErrorNoKernelImageForDevice`. That wasted ~100s and a GPU slot per
-        # attempt. The arch list is known at import time, so check it up front.
         # Binary compatibility holds WITHIN a major compute-capability
-        # generation: an sm_86 cubin runs on sm_89. So an exact match is the
-        # wrong test -- it rejected an RTX 6000 Ada (sm_89) against a build
-        # carrying sm_80/sm_86/sm_90, which would have run perfectly.
-        #
-        # The real requirement is some compiled arch with the SAME major and a
-        # minor no higher than the device's. TITAN V (7.0) fails that correctly:
-        # the only sm_7x present is sm_75, and 5 > 0.
+        # generation: an sm_86 cubin runs on sm_89. An exact match is the wrong
+        # test -- it rejected an RTX 6000 Ada against a build carrying sm_86.
         arch_list = torch.cuda.get_arch_list()
         dev_arch = f"sm_{major}{minor}"
-        compatible = []
-        for a in arch_list:
-            m = re.match(r"sm_(\d)(\d+)$", a)
-            if m and int(m.group(1)) == major and int(m.group(2)) <= minor:
-                compatible.append(a)
+        compatible = [a for a in arch_list
+                      if (m := re.match(r"sm_(\d)(\d+)$", a))
+                      and int(m.group(1)) == major and int(m.group(2)) <= minor]
         if arch_list and not compatible:
             sys.exit(
                 f"\n  This torch build has no kernels for {name} ({dev_arch}).\n"
                 f"  torch.cuda.get_arch_list() = {arch_list}\n"
-                f"  (need some sm_{major}x with minor <= {minor}; binary\n"
-                f"  compatibility only holds within a major generation)\n\n"
-                f"  Generation would fail with cudaErrorNoKernelImageForDevice\n"
-                f"  AFTER the weights load. Resubmit excluding the Volta nodes:\n"
+                f"  (need some sm_{major}x with minor <= {minor})\n\n"
+                f"  Resubmit excluding the Volta nodes:\n"
                 f"    nlprun ... -x jagupard19,jagupard20 ...\n"
-                f"  Node/GPU map: sinfo -N -o \"%N %G\" | sort -u\n"
             )
-        else:
-            print(f"  kernels available for {dev_arch} via {sorted(compatible)[-1]}")
-        if major < 8:
-            print(f"  NOTE: pre-Ampere card, using float16.")
+        print(f"  kernels via {sorted(compatible)[-1]}")
     else:
         dtype = torch.float32
         print("  no CUDA visible -> float32 on CPU (slow)")
 
-    # `torch_dtype` was renamed `dtype` in recent transformers; older releases
-    # only accept the old name.
     try:
         model = AutoModelForCausalLM.from_pretrained(
             model_id, dtype=dtype, device_map="auto")
@@ -354,56 +340,51 @@ def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10)
             model_id, torch_dtype=dtype, device_map="auto")
     model.eval()
 
-    short_batches = 0
-    n_defaulted = 0
-    for bi, start in enumerate(range(0, len(todo), batch_size)):
-        chunk = todo[start:start + batch_size]
-        prompt = build_prompt(chunk, shots)
-        msgs = [{"role": "user", "content": prompt}]
-        # apply_chat_template's return type is version-dependent: a bare Tensor
-        # on transformers 4.47, a BatchEncoding on >= 4.51. Handle both -- this
-        # crashed a cluster job at model load time precisely because the laptop
-        # and the cluster sat on opposite sides of that change.
-        enc = tok.apply_chat_template(msgs, add_generation_prompt=True,
-                                      return_tensors="pt", return_dict=True)
-        if torch.is_tensor(enc):
-            enc = {"input_ids": enc, "attention_mask": torch.ones_like(enc)}
-        else:
-            enc = dict(enc)
-        # One chunk is ONE prompt, so the mask is all ones -- but pass it
-        # explicitly: with pad_token == eos_token, transformers cannot infer it
-        # and warns that generation may be unreliable.
-        enc.setdefault("attention_mask", torch.ones_like(enc["input_ids"]))
-        enc = {k: v.to(model.device) for k, v in enc.items() if torch.is_tensor(v)}
-        input_len = enc["input_ids"].shape[-1]
+    # ---- SCORE, don't generate ---------------------------------------------
+    #
+    # Earlier this asked the model to emit one word per line for a batch of 32
+    # messages and parsed the reply. That was wrong in three ways:
+    #   * 20 batches returned fewer labels than inputs, silently defaulting 50
+    #     texts to REFERENTIAL;
+    #   * holding 32 items in one prompt lets the model drift across the list;
+    #   * it discards the model's actual confidence.
+    # Measured cost: precision 0.299, and 18% of ONE-WORD descriptions wrongly
+    # called filler -- exactly the conventionalised short forms this project
+    # exists to measure.
+    #
+    # Instead: one message per prompt, a single forward pass, compare the logits
+    # of the two answer tokens. Deterministic, impossible to drop an item, no
+    # parsing, and it yields a probability that can be thresholded.
+    tok_ref = tok.encode(" REFERENTIAL", add_special_tokens=False)[0]
+    tok_fil = tok.encode(" FILLER", add_special_tokens=False)[0]
+    if tok_ref == tok_fil:
+        tok_ref = tok.encode("REFERENTIAL", add_special_tokens=False)[0]
+        tok_fil = tok.encode("FILLER", add_special_tokens=False)[0]
+
+    prompts = [build_prompt([t], shots) + "\nAnswer:" for t in todo]
+    probs = []
+    for start in range(0, len(prompts), batch_size):
+        chunk = prompts[start:start + batch_size]
+        enc = tok(chunk, return_tensors="pt", padding=True, truncation=True,
+                  max_length=4096).to(model.device)
         with torch.no_grad():
-            gen = model.generate(**enc,
-                                 max_new_tokens=4 * len(chunk) + 32,
-                                 do_sample=False,
-                                 pad_token_id=tok.pad_token_id)
-        text = tok.decode(gen[0][input_len:], skip_special_tokens=True)
-        labels = re.findall(r"\b(REFERENTIAL|FILLER)\b", text.upper())
-        # A short reply means the model dropped items. Default the remainder to
-        # REFERENTIAL so a parse failure never silently deletes data -- but COUNT
-        # it. Defaulting quietly is how a broken run comes back looking like
-        # "almost nothing was filler" instead of like an error.
-        if len(labels) < len(chunk):
-            short_batches += 1
-            n_defaulted += len(chunk) - len(labels)
-            labels += ["REFERENTIAL"] * (len(chunk) - len(labels))
-        for t, lab in zip(chunk, labels[:len(chunk)]):
-            done[t] = (lab == "FILLER")
-        if (bi + 1) % flush_every == 0:
+            logits = model(**enc).logits[:, -1, :]
+        pair = torch.stack([logits[:, tok_fil], logits[:, tok_ref]], dim=-1)
+        p_fil = torch.softmax(pair.float(), dim=-1)[:, 0]
+        probs += p_fil.tolist()
+        for t, p in zip(todo[start:start + batch_size], p_fil.tolist()):
+            done[t] = float(p)
+        if ((start // batch_size) + 1) % flush_every == 0:
             flush()
         print(f"    {min(start + batch_size, len(todo)):,}/{len(todo):,}", end="\r")
     print()
     flush()
-    out = [done.get(t, False) for t in texts]
-    if short_batches:
-        print(f"  WARNING: {short_batches} batch(es) returned fewer labels than "
-              f"inputs; {n_defaulted} text(s) defaulted to REFERENTIAL. If this is "
-              f"more than a handful the model is not following the output format "
-              f"-- lower --batch_size or use a stronger model.")
+    out = [done.get(t, 0.0) > threshold for t in texts]
+    if probs:
+        arr = np.array(probs)
+        print(f"  P(filler): mean {arr.mean():.3f}, "
+              f"{(arr > threshold).sum():,} of {len(arr):,} over {threshold}; "
+              f"{((arr > 0.4) & (arr < 0.6)).sum():,} within 0.1 of the boundary")
     frac = sum(out) / max(1, len(out))
     if frac < 0.005:
         print(f"  WARNING: the model flagged only {100 * frac:.2f}% of undecided "
@@ -435,7 +416,8 @@ def classify(df, cfg, use_llm=True, gold_for_shots=None, batch_size=32):
               f"drawn from the gold labels)")
         undecided["llm"] = llm_label(undecided["text"].tolist(), cfg, shots,
                                      batch_size,
-                                     cache_file=cache_path(cfg, cfg["referential"]["model"]))
+                                     cache_file=cache_path(cfg, cfg["referential"]["model"]),
+                                     threshold=float(cfg["referential"].get("threshold", 0.5)))
     else:
         if len(undecided):
             print(f"  {len(undecided):,} undecided -> REFERENTIAL (--no-llm)")
