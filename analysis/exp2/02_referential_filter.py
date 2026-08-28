@@ -310,18 +310,34 @@ def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10)
         # loads all 434 shards, then dies in generate() with
         # `cudaErrorNoKernelImageForDevice`. That wasted ~100s and a GPU slot per
         # attempt. The arch list is known at import time, so check it up front.
+        # Binary compatibility holds WITHIN a major compute-capability
+        # generation: an sm_86 cubin runs on sm_89. So an exact match is the
+        # wrong test -- it rejected an RTX 6000 Ada (sm_89) against a build
+        # carrying sm_80/sm_86/sm_90, which would have run perfectly.
+        #
+        # The real requirement is some compiled arch with the SAME major and a
+        # minor no higher than the device's. TITAN V (7.0) fails that correctly:
+        # the only sm_7x present is sm_75, and 5 > 0.
         arch_list = torch.cuda.get_arch_list()
         dev_arch = f"sm_{major}{minor}"
-        if arch_list and dev_arch not in arch_list:
+        compatible = []
+        for a in arch_list:
+            m = re.match(r"sm_(\d)(\d+)$", a)
+            if m and int(m.group(1)) == major and int(m.group(2)) <= minor:
+                compatible.append(a)
+        if arch_list and not compatible:
             sys.exit(
                 f"\n  This torch build has no kernels for {name} ({dev_arch}).\n"
-                f"  torch.cuda.get_arch_list() = {arch_list}\n\n"
+                f"  torch.cuda.get_arch_list() = {arch_list}\n"
+                f"  (need some sm_{major}x with minor <= {minor}; binary\n"
+                f"  compatibility only holds within a major generation)\n\n"
                 f"  Generation would fail with cudaErrorNoKernelImageForDevice\n"
-                f"  AFTER the weights load. Resubmit onto a newer card, e.g.\n"
-                f"    nlprun ... -x jagupard[10-29] ...\n"
-                f"  or check what each node has:\n"
-                f"    sinfo -o \"%20N %30G\"\n"
+                f"  AFTER the weights load. Resubmit excluding the Volta nodes:\n"
+                f"    nlprun ... -x jagupard19,jagupard20 ...\n"
+                f"  Node/GPU map: sinfo -N -o \"%N %G\" | sort -u\n"
             )
+        else:
+            print(f"  kernels available for {dev_arch} via {sorted(compatible)[-1]}")
         if major < 8:
             print(f"  NOTE: pre-Ampere card, using float16.")
     else:
