@@ -8,6 +8,8 @@ import { IncompleteExitSurvey } from "./intro-exit/IncompleteExitSurvey";
 import { NoGameSurvey } from "./intro-exit/NoGameExitSurvey";
 import { LobbyExitSurvey } from "./intro-exit/LobbyExitSurvey";
 import { exitTier } from "./tiers";
+import { AIAgreement } from "./intro-exit/AIAgreement";
+import { AIDisclosure } from "./intro-exit/AIDisclosure";
 
 import { Introduction } from "./intro-exit/Introduction";
 import {Consent} from "./intro-exit/Consent"
@@ -24,7 +26,17 @@ export default function App() {
   const url = `${protocol}//${host}/query`;
 
   function introSteps({ game, player }) {
-    return [Consent, Introduction, Quiz];
+    // AIAgreement sits with the consent, not after the quiz. It belongs to the
+    // same act: telling people what we need from them and what they are
+    // contributing, before they invest any effort. Placing it at the end read as
+    // a compliance gate on the way to the task; here it reads as part of the
+    // agreement to take part.
+    //
+    // It also keeps `introDone` meaning what it did. As a post-quiz step it
+    // would have moved the finish line, so someone who passed the quiz and then
+    // abandoned would fall from the $1 tier to $0 -- a payment change nobody
+    // asked for.
+    return [Consent, AIAgreement, Introduction, Quiz];
     //return [Consent];
 
   }
@@ -41,8 +53,13 @@ export default function App() {
     // strings. The post-test runs here rather than as a game round, so each
     // participant works through it at their own pace and leaves without waiting
     // on their partner.
+    // AIDisclosure precedes the demographic survey wherever a participant
+    // produced data. Asked BEFORE the survey rather than buried inside it, so it
+    // reads as a separate question about data usability rather than one more
+    // demographic field -- and so it is still answered if they abandon the
+    // longer survey partway.
     if (player.get("finishedTraining")) {
-      return [Posttest, ExitSurvey];
+      return [Posttest, AIDisclosure, ExitSurvey];
     }
     // Everything below the post-test is one decision, made in tiers.js so that
     // this file, Finished.jsx and 00_preprocessing.R cannot disagree about which
@@ -62,8 +79,9 @@ export default function App() {
         return [NoGameSurvey];
       default:
         // Had a game and contributed, but it ended before training finished:
-        // inactivity timeout, or a partner who dropped. Paid in full.
-        return [IncompleteExitSurvey];
+        // inactivity timeout, or a partner who dropped. Paid in full -- and
+        // their partial data still needs an AI disclosure to be usable.
+        return [AIDisclosure, IncompleteExitSurvey];
     }
   }
 
