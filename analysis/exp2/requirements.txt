@@ -8,6 +8,19 @@
 sentence-transformers>=4.1
 transformers>=4.51
 torch>=2.1
+
+# accelerate is NOT optional. 02_referential_filter.py loads the classifier with
+# device_map="auto", and transformers raises rather than falling back:
+#   ValueError: Using a `device_map` ... requires `accelerate`
+# It fails at model load, i.e. AFTER the job has queued and taken a GPU.
+accelerate>=0.26
+
+# Tokeniser backends. Qwen models do not need these, but gemma-2 does -- keep
+# them installed so switching the classifier model is a config change and not
+# another failed job.
+sentencepiece>=0.1.99
+protobuf>=3.20
+
 numpy>=1.24
 pandas>=2.0
 pyarrow>=14

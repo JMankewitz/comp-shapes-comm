@@ -232,8 +232,14 @@ def llm_label(texts, cfg, shots, batch_size=32):
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
     tok.padding_side = "left"
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, torch_dtype=torch.bfloat16, device_map="auto")
+    # `torch_dtype` is deprecated in favour of `dtype` in recent transformers,
+    # but older releases do not accept `dtype`. Try the new name, fall back.
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, dtype=torch.bfloat16, device_map="auto")
+    except TypeError:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, torch_dtype=torch.bfloat16, device_map="auto")
     model.eval()
 
     out = []
@@ -243,18 +249,28 @@ def llm_label(texts, cfg, shots, batch_size=32):
         chunk = texts[start:start + batch_size]
         prompt = build_prompt(chunk, shots)
         msgs = [{"role": "user", "content": prompt}]
-        ids = tok.apply_chat_template(msgs, add_generation_prompt=True,
-                                      return_tensors="pt").to(model.device)
+        # apply_chat_template's return type is version-dependent: a bare Tensor
+        # on transformers 4.47, a BatchEncoding on >= 4.51. Handle both -- this
+        # crashed a cluster job at model load time precisely because the laptop
+        # and the cluster sat on opposite sides of that change.
+        enc = tok.apply_chat_template(msgs, add_generation_prompt=True,
+                                      return_tensors="pt", return_dict=True)
+        if torch.is_tensor(enc):
+            enc = {"input_ids": enc, "attention_mask": torch.ones_like(enc)}
+        else:
+            enc = dict(enc)
         # One chunk is ONE prompt, so the mask is all ones -- but pass it
         # explicitly: with pad_token == eos_token, transformers cannot infer it
         # and warns that generation may be unreliable.
-        attn = torch.ones_like(ids)
+        enc.setdefault("attention_mask", torch.ones_like(enc["input_ids"]))
+        enc = {k: v.to(model.device) for k, v in enc.items() if torch.is_tensor(v)}
+        input_len = enc["input_ids"].shape[-1]
         with torch.no_grad():
-            gen = model.generate(ids, attention_mask=attn,
+            gen = model.generate(**enc,
                                  max_new_tokens=4 * len(chunk) + 32,
                                  do_sample=False,
                                  pad_token_id=tok.pad_token_id)
-        text = tok.decode(gen[0][ids.shape[-1]:], skip_special_tokens=True)
+        text = tok.decode(gen[0][input_len:], skip_special_tokens=True)
         labels = re.findall(r"\b(REFERENTIAL|FILLER)\b", text.upper())
         # A short reply means the model dropped items. Default the remainder to
         # REFERENTIAL so a parse failure never silently deletes data -- but COUNT
