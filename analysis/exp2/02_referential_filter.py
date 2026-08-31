@@ -76,11 +76,15 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 # under any reading, so a rule hit needs no model call and no review. Anything
 # with shape content -- even one word like "arrow" -- must fall through to the
 # LLM. Recall is not the job here; precision is.
+#
+# SINGLE LETTERS ARE NOT FILLER. Tangrams get named for the letter they resemble
+# ("M", "W", "E", "L", "K"), so a pattern matching a lone letter silently deletes
+# a convention. A bare "k" for "ok" was doing exactly that.
 # ---------------------------------------------------------------------------
 PURE_FILLER = re.compile(
     r"^(?:"
     r"h(?:i+|ey+|ello+|iya)|yo|sup|"
-    r"ok(?:ay)?|kk?|alright|aight|"
+    r"ok(?:ay)?|kk|alright|aight|"   # NOT bare "k": single letters name shapes
     r"y(?:es+|ea+h?|ep|up)|n(?:o+|ope|ah)|mhm+|"
     r"got\s?it|gotcha|understood|makes sense|"
     r"thank(?:s| you)?|ty|tysm|np|no problem|you'?re welcome|"
@@ -120,7 +124,7 @@ adds noise. When genuinely unsure, keep it.
 
 Label each message REFERENTIAL or FILLER.
 
-REFERENTIAL — contributes anything about what the shape LOOKS LIKE: its parts, \
+DESCRIBES THE SHAPE (answer YES) — contributes anything about what the shape LOOKS LIKE: its parts, \
 their arrangement within the shape, its orientation, or what it resembles.
 
   - BREVITY IS NOT FILLER. Conventions get shorter with practice. By the last \
@@ -133,7 +137,7 @@ their arrangement within the shape, its orientation, or what it resembles.
     is flat".
   - Corrections count: "sorry not a triangle, a parallelogram".
 
-FILLER — everything else, including talk that is on-task:
+DOES NOT (answer NO) — everything else, including talk that is on-task:
   - Greetings, sign-offs, thanks, reactions ("lol", "Ikr").
   - Bare agreement or disagreement with NOTHING attached: "yes", "no", "ok".
   - Turn coordination: "your turn now", "you're the director".
@@ -145,7 +149,7 @@ REFERENTIAL. The four shapes appear in a DIFFERENT ORDER for each player, so \
 nothing. But "triangle on the left side" or "diamond at the bottom" describes \
 the shape itself.
 
-Answer with one word per line, in order: REFERENTIAL or FILLER."""
+Decide whether the message says anything about what the SHAPE looks like."""
 
 
 # A deliberately minimal alternative to PROMPT_HEADER.
@@ -156,18 +160,18 @@ Answer with one word per line, in order: REFERENTIAL or FILLER."""
 # square on right" and "no hole", which are descriptions. The instructions
 # created the failure. This asks the one question the task actually is.
 PROMPT_MINIMAL = """Two people are playing a game. One of them (the DIRECTOR) can \
-see an abstract shape and has to describe it so their partner can pick it out \
-from four shapes on screen.
+see an abstract shape and has to describe it so their partner can pick that shape \
+out of four on screen.
 
-Does this message say anything about what the shape LOOKS LIKE?
+Your job: decide whether one message says anything about what the SHAPE looks like.
 
-  REFERENTIAL - it describes the shape, or any part of it, in any way. This \
-includes very short messages ("down arrow", "R", "the fish"), and messages \
-saying what the shape is NOT ("no hole", "not the triangle one").
+YES - it describes the shape or any part of it, in any way. This includes very \
+short messages ("down arrow", "R", "the fish") and messages saying what the shape \
+is NOT ("no hole", "not the triangle one").
 
-  FILLER - it says nothing about the shape's appearance. Greetings, reactions, \
-talk about the game, the website, the timer, or where something sits on the \
-screen."""
+NO  - it says nothing about the shape's appearance: greetings, reactions, talk \
+about the game, the website or the timer, and talk about where a shape sits on \
+the SCREEN ("it's the top right one") rather than within the shape."""
 
 
 def load_config(path):
@@ -226,20 +230,24 @@ def build_prompt(batch_texts, shots, context=None, target_idx=None):
     """
     lines = [PROMPT_MINIMAL if PROMPT_STYLE == "minimal" else PROMPT_HEADER, ""]
     if shots:
-        lines.append("Examples of the distinction:")
+        lines.append("Examples:")
         for t, lab in shots:
-            lines.append(f'  "{t}" -> {lab}')
+            lines.append(f'  "{t}" -> {"YES" if lab == "REFERENTIAL" else "NO"}')
         lines.append("")
     if context:
         lines.append("Here is the full chat for one round of the game. The two "
                      "players are trying to agree on ONE target shape:")
-        for i, (who, msg) in enumerate(context):
+        for i, entry in enumerate(context):
+            who, msg = entry[0], entry[1]
             mark = "  >>> " if i == target_idx else "      "
             lines.append(f'{mark}{who}: {msg}')
         lines.append("")
-        lines.append("Label ONLY the message marked >>> above.")
+        lines.append("Does the message marked >>> say anything about what the "
+                     "shape looks like? Answer YES or NO.")
     else:
-        lines.append(f'Label this message: "{batch_texts[0]}"')
+        lines.append(f'Message: "{batch_texts[0]}"')
+        lines.append("Does this message say anything about what the shape looks "
+                     "like? Answer YES or NO.")
     return "\n".join(lines)
 
 
@@ -249,60 +257,38 @@ FEWSHOT_FILE = os.path.join(HERE, "fewshot_examples.csv")
 PROMPT_STYLE = "full"
 
 
-def sample_shots(gold=None, n=32, seed=0):
-    """Few-shot examples encoding Jess's boundary, not the prompt author's.
+def sample_shots(gold=None, n=None, seed=0):
+    """The CURATED illustrative examples -- all of them, in a fixed order.
 
-    Source order:
-      1. A gold frame, when one is passed (validation runs have Exp 1 loaded).
-      2. `fewshot_examples.csv` -- 240 balanced examples distilled from the Exp 1
-         hand labels and COMMITTED alongside this script.
+    NOT sampled, and NOT drawn from the annotated corpus. An earlier version took
+    random short messages from the Exp 1 hand labels, which was wrong twice over:
+    those labels carry roughly 10-15% noise, so the prompt was shown uncertain
+    calls as if they were definitions -- and random sampling meant a run could
+    contain no example of the very boundary it was about to get wrong.
 
-    (2) exists because the cluster sparse-checkout is `analysis/exp2` +
-    `data/processed_data/exp_2`; Exp 1 is 219 MB and is not there. Without a
-    committed pool, `sample_shots` silently returned [] on the cluster and the
-    classifier ran with NO examples -- a materially weaker configuration than
-    anything tested locally, and one that fails on inputs as easy as "hi".
-
-    Biased toward SHORT messages: the boundary lives there, not in 15-word
-    descriptions.
+    An example's job is to illustrate the distinction unambiguously. They live in
+    `fewshot_examples.csv`, one per row with a `why` column; edit that file to
+    change what the model is taught. Using ALL of them every time also keeps the
+    prompt constant, which makes runs comparable and the cache meaningful.
     """
-    rng = random.Random(seed)
-    pairs = []
     if gold is not None and len(gold):
+        rng = random.Random(seed)          # legacy path, callers that pass a frame
+        pairs = []
         for lab, want in (("FILLER", True), ("REFERENTIAL", False)):
             pool = gold[gold["chit_chat_gold"] == want]
             pool = pool[pool["text"].str.len() <= 60]
             if len(pool):
-                picks = rng.sample(list(pool["text"].unique()),
-                                   min(n // 2, pool["text"].nunique()))
-                pairs += [(t, lab) for t in picks]
-    elif os.path.exists(FEWSHOT_FILE):
-        pool = pd.read_csv(FEWSHOT_FILE)
-        # Draw from EVERY stratum, not at random across the pool.
-        #
-        # The first version sampled randomly from short messages, so a run could
-        # show the model no negated-referential example at all -- and negation is
-        # where it failed hardest (it called "no triangle" filler, though gold has
-        # 558 negated referential against 25 negated filler). Guaranteeing
-        # coverage of the hard strata is the point of stratifying them.
-        if "stratum" in pool.columns:
-            strata = sorted(pool["stratum"].unique())
-            per = max(1, n // len(strata))
-            for st in strata:
-                sub = pool[pool["stratum"] == st]
-                texts = sub["text"].dropna().tolist()
-                labs = dict(zip(sub["text"], sub["label"]))
-                for t in rng.sample(texts, min(per, len(texts))):
-                    pairs.append((t, labs[t]))
-        else:
-            for lab in ("FILLER", "REFERENTIAL"):
-                texts = pool.loc[pool["label"] == lab, "text"].dropna().tolist()
-                pairs += [(t, lab) for t in rng.sample(texts, min(n // 2, len(texts)))]
-    if not pairs:
-        print("  WARNING: no few-shot examples available. The classifier is much "
-              "weaker without them -- check that fewshot_examples.csv shipped.")
-    rng.shuffle(pairs)
-    return pairs
+                k = min((n or 32) // 2, pool["text"].nunique())
+                pairs += [(t, lab) for t in rng.sample(list(pool["text"].unique()), k)]
+        rng.shuffle(pairs)
+        return pairs
+
+    if not os.path.exists(FEWSHOT_FILE):
+        print("  WARNING: fewshot_examples.csv missing -- the classifier is much "
+              "weaker without examples.")
+        return []
+    pool = pd.read_csv(FEWSHOT_FILE)
+    return list(zip(pool["text"].astype(str), pool["label"].astype(str)))
 
 
 def cache_path(cfg, model_id):
@@ -428,11 +414,22 @@ def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
     # Instead: one message per prompt, a single forward pass, compare the logits
     # of the two answer tokens. Deterministic, impossible to drop an item, no
     # parsing, and it yields a probability that can be thresholded.
-    tok_ref = tok.encode("REFERENTIAL", add_special_tokens=False)[0]
-    tok_fil = tok.encode("FILLER", add_special_tokens=False)[0]
+    # YES / NO are SINGLE tokens of comparable frequency. The previous pair was
+    # not: "REFERENTIAL" tokenises to ['REFER', 'ENTIAL'] and "FILLER" to
+    # ['F', 'ILL', 'ER'], so the comparison was P('REFER') vs P('F') -- and 'F'
+    # is far more likely a priori, biasing every decision toward FILLER.
+    def one(word, *alts):
+        for w in (word,) + alts:
+            ids = tok.encode(w, add_special_tokens=False)
+            if len(ids) == 1:
+                return ids[0]
+        return tok.encode(word, add_special_tokens=False)[0]
+    tok_ref = one("YES", "Yes", "yes", " YES")
+    tok_fil = one("NO", "No", "no", " NO")
     if tok_ref == tok_fil:
-        tok_ref = tok.encode(" REFERENTIAL", add_special_tokens=False)[0]
-        tok_fil = tok.encode(" FILLER", add_special_tokens=False)[0]
+        raise RuntimeError("YES/NO share a first token for this tokenizer")
+    print(f"  answer tokens: YES={tok_ref} NO={tok_fil} "
+          f"({tok.decode([tok_ref])!r}/{tok.decode([tok_fil])!r})")
 
     # Instruction-tuned models must see their chat template. This was lost when
     # generation (which applied it) was replaced by logit scoring (which did
@@ -506,16 +503,20 @@ def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
 # Classify
 # ---------------------------------------------------------------------------
 
-def classify(df, cfg, use_llm=True, gold_for_shots=None, batch_size=32):
+def classify(df, cfg, use_llm=True, gold_for_shots=None, batch_size=32,
+             context_df=None):
     """Add `chit_chat` and `method` columns.
 
     Classification is per MESSAGE IN ITS ROUND, not per unique string. The same
     text in two rounds is two different questions once context is supplied, and
     context is what makes short and negated messages decidable at all.
 
-    `df` needs `text`; `roundID`, `playerID` and `director_msg` are used for
-    context when present (validation and production have them; --self-test does
-    not, and falls back to context-free prompts).
+    `df` is the set of messages TO LABEL. `context_df` is the full, unfiltered
+    chat used to reconstruct each round's transcript -- they are different
+    frames and conflating them was a real bug: validation labels only director
+    messages from a random half, so building transcripts from it showed the
+    model roughly a quarter of each round with the matcher's side missing.
+    Pass the complete chat frame as `context_df`.
     """
     df = df.drop(columns=[c for c in ("chit_chat", "method") if c in df.columns]).copy()
     df["_rule"] = df["text"].map(rule_label)
@@ -533,24 +534,30 @@ def classify(df, cfg, use_llm=True, gold_for_shots=None, batch_size=32):
 
         # Build one transcript per round so every judged message can be shown
         # inside the exchange it belongs to.
+        src = context_df if context_df is not None else df
         transcripts = {}
         if has_ctx:
-            for rid, grp in df.groupby("roundID", sort=False):
+            for rid, grp in src.groupby("roundID", sort=False):
                 msgs = []
-                for _, r in grp.iterrows():
+                for i, r in grp.iterrows():
                     who = ("DIRECTOR"
                            if str(r.get("director_msg", "")).upper() in ("TRUE", "T", "1")
                            else "MATCHER")
-                    msgs.append((who, r["text"]))
+                    # carry the source index so the target can be located exactly
+                    msgs.append((who, r["text"], i))
                 transcripts[rid] = msgs
 
         items = []
-        for _, r in need.iterrows():
+        for _idx, r in need.iterrows():
             if has_ctx:
                 rid = r["roundID"]
                 ctx = transcripts.get(rid, [])
-                # Locate this message within its round.
-                idx = next((i for i, (_, m) in enumerate(ctx) if m == r["text"]), None)
+                # By source index first: a round can legitimately contain the
+                # same string twice, and matching on text marked the wrong one.
+                idx = next((k for k, (_, _, i) in enumerate(ctx) if i == _idx), None)
+                if idx is None:
+                    idx = next((k for k, (_, m, _) in enumerate(ctx)
+                                if m == r["text"]), None)
                 key = f"{rid}|{r['text']}"
                 prompt = build_prompt([r["text"]], shots, context=ctx, target_idx=idx)
             else:
@@ -592,17 +599,20 @@ def report(pred, gold, label):
 
 
 SELF_TEST = [
-    ("hi", True),
-    ("gg good game", True),
-    ("for me its top right", True),
-    ("did it freeze up for you too", True),
-    ("alright now you're the matcher", True),
-    ("arrow pointing up with a diamond below", False),
-    ("the pointy one not the fish", False),
-    ("triangle on the left side", False),
-    ("looks like a bird with its wings out", False),
-    ("no that's not it try again", True),
-    ("and it has a hole in the middle too", False),
+    # Held out from fewshot_examples.csv ON PURPOSE. Reusing curated examples
+    # here would test whether the model can echo its own prompt, not whether it
+    # can draw the distinction. Keep these disjoint if you edit either file.
+    ("hey there", True),
+    ("you got it", True),
+    ("mine is frozen", True),
+    ("how much are we getting paid for this", True),
+    ("i clicked the wrong one sorry", True),
+    ("3 hooks", False),
+    ("half circle on top", False),
+    ("K", False),
+    ("no diamond", False),
+    ("not the one with the hat", False),
+    ("with two feet", False),
 ]
 
 
@@ -673,14 +683,23 @@ def main():
             d = d.sample(min(args.limit, len(d)), random_state=0).reset_index(drop=True)
             print(f"  limited to {len(d):,}")
 
-        # Few-shot examples come from a disjoint half so validation is honest.
-        half = d.sample(frac=0.5, random_state=1)
-        shots_src = half if not args.no_llm else None
-        test = d.drop(half.index) if not args.no_llm else d
-        print(f"  scoring on {len(test):,} held-out messages")
+        # Few-shot examples come from the COMMITTED pool, and the messages in it
+        # are removed from the test set. The previous version split the data in
+        # half to source shots -- discarding 50% of the evaluation to obtain 32
+        # examples, and leaking anyway since the same string recurs across
+        # rounds. Excluding 393 texts costs almost nothing and is airtight.
+        shot_texts = set()
+        if os.path.exists(FEWSHOT_FILE):
+            shot_texts = set(pd.read_csv(FEWSHOT_FILE)["text"].astype(str))
+        test = d[~d["text"].isin(shot_texts)] if shot_texts else d
+        print(f"  scoring on {len(test):,} messages "
+              f"({len(d) - len(test):,} excluded as few-shot examples)")
 
+        # `chats` -- NOT `test` -- supplies the round transcripts: the full
+        # exchange including the matcher, unfiltered and unsplit.
         res = classify(test, cfg, use_llm=not args.no_llm,
-                       gold_for_shots=shots_src, batch_size=args.batch_size)
+                       gold_for_shots=None, batch_size=args.batch_size,
+                       context_df=chats)
         m = report(res["chit_chat"].astype(bool), res["chit_chat_gold"].astype(bool),
                    "rules only" if args.no_llm else "rules + LLM")
         print("\n  Read a residual 10-15% disagreement as gold-set noise: hand-coding")
@@ -705,9 +724,12 @@ def main():
         gold["chit_chat_gold"] = is_true(gold["chit_chat"])
         gold = gold[is_true(gold["director_msg"])]
 
-    res = classify(chats, cfg, use_llm=not args.no_llm,
-                   gold_for_shots=gold if len(gold) else None,
-                   batch_size=args.batch_size)
+    # Label the DIRECTOR's messages; the matcher's turns are still supplied as
+    # context so "no hole" is read inside the exchange it belongs to.
+    targets = chats[is_true(chats["director_msg"])] if "director_msg" in chats else chats
+    res = classify(targets, cfg, use_llm=not args.no_llm,
+                   gold_for_shots=None, batch_size=args.batch_size,
+                   context_df=chats)
     out = os.path.join(REPO, cfg["paths"]["out"])
     os.makedirs(out, exist_ok=True)
     path = os.path.join(out, "referential_flags.parquet")

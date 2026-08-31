@@ -25,7 +25,7 @@ referential:
   # cluster GPU; same shape as the social-games annotation pipeline. Few-shot
   # examples are drawn from Exp 1's hand labels at runtime, so the operative
   # boundary is Jess's, not the prompt author's.
-  model: "Qwen/Qwen2.5-7B-Instruct"
+  model: "Qwen/Qwen3-32B"
   batch_size: 8
   # Decision threshold on P(filler). The cache stores the probability, so
   # re-thresholding costs a rerun of this script with no GPU work -- every text
