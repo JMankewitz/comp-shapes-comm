@@ -72,7 +72,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default=os.path.join(HERE, "config.yaml"))
-    ap.add_argument("--model", default=None, help="which cache to read")
+    ap.add_argument("--model", default=None, help="filter caches by model id")
+    ap.add_argument("--cache", default=None,
+                    help="explicit cache file. Two prompt styles for the same "
+                         "model share a slug, so --model alone picks whichever "
+                         "is newer -- name the file to compare them.")
     ap.add_argument("--show", type=int, default=25)
     args = ap.parse_args()
 
@@ -80,9 +84,15 @@ def main():
         cfg = yaml.safe_load(f)
     out = os.path.join(REPO, cfg["paths"]["out"])
 
-    caches = sorted(glob.glob(os.path.join(out, "llm_labels_*.parquet")),
-                    key=os.path.getmtime)
-    if args.model:
+    if args.cache:
+        caches = [args.cache if os.path.isabs(args.cache)
+                  else os.path.join(out, args.cache)]
+        if not os.path.exists(caches[0]):
+            sys.exit(f"No such cache: {caches[0]}")
+    else:
+        caches = sorted(glob.glob(os.path.join(out, "llm_labels_*.parquet")),
+                        key=os.path.getmtime)
+    if args.model and not args.cache:
         slug = re.sub(r"[^A-Za-z0-9]+", "-", args.model).strip("-")
         caches = [c for c in caches if slug in os.path.basename(c)]
     if not caches:
