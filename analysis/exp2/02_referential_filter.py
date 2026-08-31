@@ -107,36 +107,43 @@ META_HINT = re.compile(
     re.IGNORECASE,
 )
 
-PROMPT_HEADER = """You are labelling messages from a two-player reference game. \
-One player (the director) describes an abstract tangram shape so their partner \
-can pick it out of four options on screen.
+PROMPT_HEADER = """You are helping analyse how people invent shared names for \
+abstract shapes. Two players play a reference game: the director describes a \
+tangram shape so their partner can pick it out of four on screen. Over repeated \
+rounds they converge on short conventional labels for each shape.
 
-The messages you keep will be CONCATENATED into a single description of that \
-shape, so keep everything that contributes to the description and drop \
-everything that does not.
+Our goal is to extract, for each round, the director's DESCRIPTION of the shape \
+— discarding everything else — and then measure how those descriptions change as \
+conventions form. The messages you keep are concatenated into that description. \
+Dropping a real description destroys the measurement; keeping a stray "ok" merely \
+adds noise. When genuinely unsure, keep it.
 
 Label each message REFERENTIAL or FILLER.
 
-REFERENTIAL — contributes to describing what the shape LOOKS LIKE: its parts, \
+REFERENTIAL — contributes anything about what the shape LOOKS LIKE: its parts, \
 their arrangement within the shape, its orientation, or what it resembles.
-  - Fragments count: "arrow up", "the pointy one", "not the fish".
-  - FOLLOW-UP DETAIL COUNTS. A director often splits one description across \
-    several messages, or adds to it after a pause: "it has a hole in the middle \
-    too", "and the bottom is flat". These are part of the description.
-  - Corrections to a description count: "no I meant the wider one".
+
+  - BREVITY IS NOT FILLER. Conventions get shorter with practice. By the last \
+    round a full description may be two words: "down arrow", "n shape", "the \
+    fish", "tall". These are the most important messages in the corpus.
+  - NEGATION IS USUALLY DESCRIPTION. "no triangle", "not the fish", "No cutout", \
+    "not the ones pointed straight down" say what the shape does NOT have, which \
+    identifies it. Only a bare "no" with nothing attached is filler.
+  - FOLLOW-UP DETAIL COUNTS: "it has a hole in the middle too", "and the bottom \
+    is flat".
+  - Corrections count: "sorry not a triangle, a parallelogram".
 
 FILLER — everything else, including talk that is on-task:
-  - Greetings, sign-offs, thanks.
-  - Bare agreement or disagreement with nothing added: "yes", "no", "ok", \
-    "that's it", "got it", "nope try again".
+  - Greetings, sign-offs, thanks, reactions ("lol", "Ikr").
+  - Bare agreement or disagreement with NOTHING attached: "yes", "no", "ok".
   - Turn coordination: "your turn now", "you're the director".
   - Interface and study talk: freezing, lag, refreshing, timers, pay, bonus.
 
-CRITICAL — screen position is FILLER. The four shapes appear in a DIFFERENT \
-ORDER for each player, so "it's the top right one" or "for me that was bottom \
-left" tells the partner nothing about the shape and is not a description. \
-Position WITHIN the shape is REFERENTIAL: "triangle on the left side", \
-"diamond at the bottom".
+CRITICAL — position ON THE SCREEN is FILLER; position WITHIN THE SHAPE is \
+REFERENTIAL. The four shapes appear in a DIFFERENT ORDER for each player, so \
+"it's the top right one" or "for me that was bottom left" tells the partner \
+nothing. But "triangle on the left side" or "diamond at the bottom" describes \
+the shape itself.
 
 Answer with one word per line, in order: REFERENTIAL or FILLER."""
 
@@ -202,7 +209,7 @@ def build_prompt(batch_texts, shots):
 FEWSHOT_FILE = os.path.join(HERE, "fewshot_examples.csv")
 
 
-def sample_shots(gold=None, n=16, seed=0):
+def sample_shots(gold=None, n=32, seed=0):
     """Few-shot examples encoding Jess's boundary, not the prompt author's.
 
     Source order:
@@ -231,10 +238,26 @@ def sample_shots(gold=None, n=16, seed=0):
                 pairs += [(t, lab) for t in picks]
     elif os.path.exists(FEWSHOT_FILE):
         pool = pd.read_csv(FEWSHOT_FILE)
-        for lab in ("FILLER", "REFERENTIAL"):
-            texts = pool.loc[pool["label"] == lab, "text"].dropna().tolist()
-            picks = rng.sample(texts, min(n // 2, len(texts)))
-            pairs += [(t, lab) for t in picks]
+        # Draw from EVERY stratum, not at random across the pool.
+        #
+        # The first version sampled randomly from short messages, so a run could
+        # show the model no negated-referential example at all -- and negation is
+        # where it failed hardest (it called "no triangle" filler, though gold has
+        # 558 negated referential against 25 negated filler). Guaranteeing
+        # coverage of the hard strata is the point of stratifying them.
+        if "stratum" in pool.columns:
+            strata = sorted(pool["stratum"].unique())
+            per = max(1, n // len(strata))
+            for st in strata:
+                sub = pool[pool["stratum"] == st]
+                texts = sub["text"].dropna().tolist()
+                labs = dict(zip(sub["text"], sub["label"]))
+                for t in rng.sample(texts, min(per, len(texts))):
+                    pairs.append((t, labs[t]))
+        else:
+            for lab in ("FILLER", "REFERENTIAL"):
+                texts = pool.loc[pool["label"] == lab, "text"].dropna().tolist()
+                pairs += [(t, lab) for t in rng.sample(texts, min(n // 2, len(texts)))]
     if not pairs:
         print("  WARNING: no few-shot examples available. The classifier is much "
               "weaker without them -- check that fewshot_examples.csv shipped.")
