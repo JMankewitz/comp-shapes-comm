@@ -148,6 +148,28 @@ the shape itself.
 Answer with one word per line, in order: REFERENTIAL or FILLER."""
 
 
+# A deliberately minimal alternative to PROMPT_HEADER.
+#
+# The elaborate prompt lists rules, caveats and a CRITICAL section, and its
+# FILLER bullet says 'bare agreement or disagreement: "yes", "no", "ok"'. A 7B
+# model then dropped 89% of messages beginning "no" -- including "no small
+# square on right" and "no hole", which are descriptions. The instructions
+# created the failure. This asks the one question the task actually is.
+PROMPT_MINIMAL = """Two people are playing a game. One of them (the DIRECTOR) can \
+see an abstract shape and has to describe it so their partner can pick it out \
+from four shapes on screen.
+
+Does this message say anything about what the shape LOOKS LIKE?
+
+  REFERENTIAL - it describes the shape, or any part of it, in any way. This \
+includes very short messages ("down arrow", "R", "the fish"), and messages \
+saying what the shape is NOT ("no hole", "not the triangle one").
+
+  FILLER - it says nothing about the shape's appearance. Greetings, reactions, \
+talk about the game, the website, the timer, or where something sits on the \
+screen."""
+
+
 def load_config(path):
     with open(path) as f:
         return yaml.safe_load(f)
@@ -193,20 +215,38 @@ def is_true(s):
 # Stage 2: LLM
 # ---------------------------------------------------------------------------
 
-def build_prompt(batch_texts, shots):
-    lines = [PROMPT_HEADER, ""]
+def build_prompt(batch_texts, shots, context=None, target_idx=None):
+    """One message to judge, optionally shown inside its round transcript.
+
+    CONTEXT IS THE POINT. Judged alone, "R" could be a typo and "no hole" could
+    be a reply. Inside a round where the director is describing a shape, both are
+    obviously description -- and the round transcript is exactly what a human
+    annotator has in front of them. Without it a 7B model destroyed 89% of
+    negated descriptions and 33% of one-word ones while being confident about it.
+    """
+    lines = [PROMPT_MINIMAL if PROMPT_STYLE == "minimal" else PROMPT_HEADER, ""]
     if shots:
-        lines.append("Examples:")
+        lines.append("Examples of the distinction:")
         for t, lab in shots:
             lines.append(f'  "{t}" -> {lab}')
         lines.append("")
-    lines.append(f"Now label these {len(batch_texts)} messages:")
-    for i, t in enumerate(batch_texts, 1):
-        lines.append(f'{i}. "{t}"')
+    if context:
+        lines.append("Here is the full chat for one round of the game. The two "
+                     "players are trying to agree on ONE target shape:")
+        for i, (who, msg) in enumerate(context):
+            mark = "  >>> " if i == target_idx else "      "
+            lines.append(f'{mark}{who}: {msg}')
+        lines.append("")
+        lines.append("Label ONLY the message marked >>> above.")
+    else:
+        lines.append(f'Label this message: "{batch_texts[0]}"')
     return "\n".join(lines)
 
 
 FEWSHOT_FILE = os.path.join(HERE, "fewshot_examples.csv")
+
+# Set from --prompt; module-level so build_prompt stays a pure function of it.
+PROMPT_STYLE = "full"
 
 
 def sample_shots(gold=None, n=32, seed=0):
@@ -272,10 +312,13 @@ def cache_path(cfg, model_id):
     out = os.path.join(REPO, cfg["paths"]["out"])
     os.makedirs(out, exist_ok=True)
     slug = re.sub(r"[^A-Za-z0-9]+", "-", model_id).strip("-")
-    return os.path.join(out, f"llm_labels_{slug}.parquet")
+    # Prompt style is part of the identity: two styles give different labels for
+    # the same text, and silently merging them would be invisible.
+    suffix = "" if PROMPT_STYLE == "full" else f"_{PROMPT_STYLE}"
+    return os.path.join(out, f"llm_labels_{slug}{suffix}.parquet")
 
 
-def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
+def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
               threshold=0.5):
     """Label texts with a local instruct model. Returns list of bools (True=filler).
 
@@ -302,12 +345,17 @@ def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
         except Exception as e:
             print(f"  ignoring unreadable cache {cache_file}: {e}")
 
-    todo = [t for t in texts if t not in done]
-    if not todo:
-        print("  every text already labelled from cache; no model needed")
-        return [done[t] > threshold for t in texts]
-    if len(todo) < len(texts):
-        print(f"  {len(todo):,} of {len(texts):,} still need the model")
+    # items: list of (cache_key, prompt_text). The key carries the round, so the
+    # same string in two different rounds is scored separately -- context makes
+    # them different questions.
+    keys = [k for k, _ in items]
+    todo_idx = [i for i, k in enumerate(keys) if k not in done]
+    if not todo_idx:
+        print("  every message already labelled from cache; no model needed")
+        return [done[k] > threshold for k in keys]
+    if len(todo_idx) < len(items):
+        print(f"  {len(todo_idx):,} of {len(items):,} still need the model")
+    todo = [keys[i] for i in todo_idx]
 
     def flush():
         if not cache_file:
@@ -384,25 +432,49 @@ def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
         tok_ref = tok.encode("REFERENTIAL", add_special_tokens=False)[0]
         tok_fil = tok.encode("FILLER", add_special_tokens=False)[0]
 
-    prompts = [build_prompt([t], shots) + "\nAnswer:" for t in todo]
+    prompts = [items[i][1] + "\nAnswer:" for i in todo_idx]
     probs = []
-    for start in range(0, len(prompts), batch_size):
+    start = 0
+    while start < len(prompts):
         chunk = prompts[start:start + batch_size]
         enc = tok(chunk, return_tensors="pt", padding=True, truncation=True,
                   max_length=4096).to(model.device)
-        with torch.no_grad():
-            logits = model(**enc).logits[:, -1, :]
+        # Ask for ONE position's logits, not all of them.
+        #
+        # A causal LM returns [batch, seq_len, vocab] by default. At batch 32,
+        # ~950 tokens of prompt and Qwen's 152k vocab that is 9.3 GB in bf16 --
+        # which OOMed a 50 GB card -- and every position but the last is thrown
+        # away here. The kwarg was renamed across transformers versions, so try
+        # both and fall back to the full tensor with a smaller batch.
+        try:
+          with torch.no_grad():
+            try:
+                out_l = model(**enc, logits_to_keep=1)
+            except TypeError:
+                try:
+                    out_l = model(**enc, num_logits_to_keep=1)
+                except TypeError:
+                    out_l = model(**enc)
+            logits = out_l.logits[:, -1, :]
+        except torch.cuda.OutOfMemoryError:
+            if batch_size <= 1:
+                raise
+            batch_size = max(1, batch_size // 2)
+            print(f"\n  CUDA OOM -- halving batch to {batch_size} and retrying")
+            torch.cuda.empty_cache()
+            continue
         pair = torch.stack([logits[:, tok_fil], logits[:, tok_ref]], dim=-1)
         p_fil = torch.softmax(pair.float(), dim=-1)[:, 0]
         probs += p_fil.tolist()
         for t, p in zip(todo[start:start + batch_size], p_fil.tolist()):
             done[t] = float(p)
-        if ((start // batch_size) + 1) % flush_every == 0:
+        if ((start // max(1, batch_size)) + 1) % flush_every == 0:
             flush()
         print(f"    {min(start + batch_size, len(todo)):,}/{len(todo):,}", end="\r")
+        start += batch_size
     print()
     flush()
-    out = [done.get(t, 0.0) > threshold for t in texts]
+    out = [done.get(k, 0.0) > threshold for k in keys]
     if probs:
         arr = np.array(probs)
         print(f"  P(filler): mean {arr.mean():.3f}, "
@@ -421,36 +493,70 @@ def llm_label(texts, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
 # ---------------------------------------------------------------------------
 
 def classify(df, cfg, use_llm=True, gold_for_shots=None, batch_size=32):
-    """Add `chit_chat` and `method` columns. Classification is per UNIQUE text."""
-    # Exp 1 frames already carry a hand-coded `chit_chat`; without this the merge
-    # below silently produces chit_chat_x / chit_chat_y and the caller reads
-    # neither. The gold labels live in `chit_chat_gold` by then.
-    df = df.drop(columns=[c for c in ("chit_chat", "method") if c in df.columns])
-    uniq = pd.DataFrame({"text": sorted(df["text"].unique())})
-    uniq["rule"] = uniq["text"].map(rule_label)
-    n_rule = uniq["rule"].notna().sum()
-    print(f"  {len(uniq):,} unique strings; rules decided {n_rule:,} "
-          f"({100 * n_rule / len(uniq):.0f}%)")
+    """Add `chit_chat` and `method` columns.
 
-    undecided = uniq[uniq["rule"].isna()].copy()
-    if use_llm and len(undecided):
+    Classification is per MESSAGE IN ITS ROUND, not per unique string. The same
+    text in two rounds is two different questions once context is supplied, and
+    context is what makes short and negated messages decidable at all.
+
+    `df` needs `text`; `roundID`, `playerID` and `director_msg` are used for
+    context when present (validation and production have them; --self-test does
+    not, and falls back to context-free prompts).
+    """
+    df = df.drop(columns=[c for c in ("chit_chat", "method") if c in df.columns]).copy()
+    df["_rule"] = df["text"].map(rule_label)
+
+    n_rule = int(df["_rule"].notna().sum())
+    print(f"  {len(df):,} messages; rules decided {n_rule:,} "
+          f"({100 * n_rule / max(1, len(df)):.0f}%)")
+
+    need = df[df["_rule"].isna()]
+    if use_llm and len(need):
         shots = sample_shots(gold_for_shots)
-        print(f"  {len(undecided):,} to the model ({len(shots)} few-shot examples "
-              f"drawn from the gold labels)")
-        undecided["llm"] = llm_label(undecided["text"].tolist(), cfg, shots,
-                                     batch_size,
-                                     cache_file=cache_path(cfg, cfg["referential"]["model"]),
-                                     threshold=float(cfg["referential"].get("threshold", 0.5)))
-    else:
-        if len(undecided):
-            print(f"  {len(undecided):,} undecided -> REFERENTIAL (--no-llm)")
-        undecided["llm"] = False
+        has_ctx = "roundID" in df.columns
+        print(f"  {len(need):,} to the model ({len(shots)} few-shot examples"
+              f"{', with round context' if has_ctx else ', NO round context'})")
 
-    uniq = uniq.merge(undecided[["text", "llm"]], on="text", how="left")
-    uniq["chit_chat"] = (uniq["rule"].where(uniq["rule"].notna(), uniq["llm"])
-                         .astype("boolean").fillna(False).astype(bool))
-    uniq["method"] = uniq["rule"].notna().map({True: "rule", False: "llm"})
-    return df.merge(uniq[["text", "chit_chat", "method"]], on="text", how="left")
+        # Build one transcript per round so every judged message can be shown
+        # inside the exchange it belongs to.
+        transcripts = {}
+        if has_ctx:
+            for rid, grp in df.groupby("roundID", sort=False):
+                msgs = []
+                for _, r in grp.iterrows():
+                    who = ("DIRECTOR"
+                           if str(r.get("director_msg", "")).upper() in ("TRUE", "T", "1")
+                           else "MATCHER")
+                    msgs.append((who, r["text"]))
+                transcripts[rid] = msgs
+
+        items = []
+        for _, r in need.iterrows():
+            if has_ctx:
+                rid = r["roundID"]
+                ctx = transcripts.get(rid, [])
+                # Locate this message within its round.
+                idx = next((i for i, (_, m) in enumerate(ctx) if m == r["text"]), None)
+                key = f"{rid}|{r['text']}"
+                prompt = build_prompt([r["text"]], shots, context=ctx, target_idx=idx)
+            else:
+                key = r["text"]
+                prompt = build_prompt([r["text"]], shots)
+            items.append((key, prompt))
+
+        preds = llm_label(items, cfg, shots, batch_size,
+                          cache_file=cache_path(cfg, cfg["referential"]["model"]),
+                          threshold=float(cfg["referential"].get("threshold", 0.5)))
+        df.loc[need.index, "_llm"] = preds
+    else:
+        if len(need):
+            print(f"  {len(need):,} undecided -> REFERENTIAL (--no-llm)")
+        df.loc[need.index, "_llm"] = False
+
+    df["chit_chat"] = (df["_rule"].where(df["_rule"].notna(), df.get("_llm"))
+                       .astype("boolean").fillna(False).astype(bool))
+    df["method"] = df["_rule"].notna().map({True: "rule", False: "llm"})
+    return df.drop(columns=[c for c in ("_rule", "_llm") if c in df.columns])
 
 
 def report(pred, gold, label):
@@ -501,11 +607,11 @@ def self_test(cfg, batch_size):
     df = pd.DataFrame({"text": [t for t, _ in SELF_TEST]})
     gold = [g for _, g in SELF_TEST]
     res = classify(df, cfg, use_llm=True, batch_size=batch_size)
-    pred = res.set_index("text").loc[df["text"], "chit_chat"].astype(bool).tolist()
+    pred = res["chit_chat"].astype(bool).tolist()
     texts = df["text"].tolist()
     ok = sum(p == g for p, g in zip(pred, gold))
     print(f"\n  self-test: {ok}/{len(gold)} correct\n")
-    by = res.set_index("text").loc[texts, "method"].tolist()
+    by = res["method"].tolist()
     for t, g, p, m in zip(texts, gold, pred, by):
         mark = "ok  " if p == g else "MISS"
         print(f"    {mark} pred={'FILLER' if p else 'REFERENTIAL':12} "
@@ -524,9 +630,15 @@ def main():
     ap.add_argument("--no-llm", action="store_true", help="rules only")
     ap.add_argument("--batch_size", type=int, default=32)
     ap.add_argument("--limit", type=int, default=None, help="cap texts (smoke test)")
+    ap.add_argument("--prompt", choices=["full", "minimal"], default="minimal",
+                    help="minimal asks the one question the task is; full is the "
+                         "rule-laden version whose FILLER bullet taught a 7B model "
+                         "to drop every message starting with 'no'")
     ap.add_argument("--self-test", action="store_true",
                     help="run 9 boundary cases through the model and stop")
     args = ap.parse_args()
+    global PROMPT_STYLE
+    PROMPT_STYLE = args.prompt
     cfg = load_config(args.config)
 
     if args.self_test:
