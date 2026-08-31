@@ -314,8 +314,10 @@ def cache_path(cfg, model_id):
     slug = re.sub(r"[^A-Za-z0-9]+", "-", model_id).strip("-")
     # Prompt style is part of the identity: two styles give different labels for
     # the same text, and silently merging them would be invisible.
-    suffix = "" if PROMPT_STYLE == "full" else f"_{PROMPT_STYLE}"
-    return os.path.join(out, f"llm_labels_{slug}{suffix}.parquet")
+    # Always suffix, including "full": an unsuffixed name collided with the
+    # pre-context cache and silently merged two incompatible key formats into
+    # one file, which then read back as the older run's results.
+    return os.path.join(out, f"llm_labels_{slug}_{PROMPT_STYLE}_ctx.parquet")
 
 
 def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
@@ -426,19 +428,31 @@ def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
     # Instead: one message per prompt, a single forward pass, compare the logits
     # of the two answer tokens. Deterministic, impossible to drop an item, no
     # parsing, and it yields a probability that can be thresholded.
-    tok_ref = tok.encode(" REFERENTIAL", add_special_tokens=False)[0]
-    tok_fil = tok.encode(" FILLER", add_special_tokens=False)[0]
+    tok_ref = tok.encode("REFERENTIAL", add_special_tokens=False)[0]
+    tok_fil = tok.encode("FILLER", add_special_tokens=False)[0]
     if tok_ref == tok_fil:
-        tok_ref = tok.encode("REFERENTIAL", add_special_tokens=False)[0]
-        tok_fil = tok.encode("FILLER", add_special_tokens=False)[0]
+        tok_ref = tok.encode(" REFERENTIAL", add_special_tokens=False)[0]
+        tok_fil = tok.encode(" FILLER", add_special_tokens=False)[0]
 
-    prompts = [items[i][1] + "\nAnswer:" for i in todo_idx]
+    # Instruction-tuned models must see their chat template. This was lost when
+    # generation (which applied it) was replaced by logit scoring (which did
+    # not), and a 7B model then behaved close to randomly -- flagging ~50% of
+    # everything as filler. add_generation_prompt=True opens the assistant turn,
+    # so the very next token is the answer we score.
+    def wrap(text):
+        try:
+            return tok.apply_chat_template(
+                [{"role": "user", "content": text}],
+                tokenize=False, add_generation_prompt=True)
+        except Exception:
+            return text + "\nAnswer:"
+    prompts = [wrap(items[i][1]) for i in todo_idx]
     probs = []
     start = 0
     while start < len(prompts):
         chunk = prompts[start:start + batch_size]
         enc = tok(chunk, return_tensors="pt", padding=True, truncation=True,
-                  max_length=4096).to(model.device)
+                  max_length=4096, add_special_tokens=False).to(model.device)
         # Ask for ONE position's logits, not all of them.
         #
         # A causal LM returns [batch, seq_len, vocab] by default. At batch 32,
