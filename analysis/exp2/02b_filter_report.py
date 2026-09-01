@@ -14,7 +14,10 @@ This reads the cached P(filler) scores and reports the three things that caught
 it: the threshold sweep, the error rate BY MESSAGE LENGTH, and sampled
 disagreements you can actually read.
 
-Runs on your laptop against an rsynced cache -- no GPU, seconds.
+Runs on your laptop against an rsynced cache -- no GPU, seconds. Needs pandas +
+pyarrow, so run it under Anaconda rather than the system python:
+
+    /opt/anaconda3/bin/python3 analysis/exp2/02b_filter_report.py
 
 Usage:
     python 02b_filter_report.py                       # newest cache found
@@ -28,7 +31,6 @@ import os
 import re
 import sys
 
-import numpy as np
 import pandas as pd
 import yaml
 

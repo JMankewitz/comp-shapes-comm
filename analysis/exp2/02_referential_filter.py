@@ -288,7 +288,23 @@ def sample_shots(gold=None, n=None, seed=0):
               "weaker without examples.")
         return []
     pool = pd.read_csv(FEWSHOT_FILE)
-    return list(zip(pool["text"].astype(str), pool["label"].astype(str)))
+    pairs = list(zip(pool["text"].astype(str), pool["label"].astype(str)))
+
+    # INTERLEAVE the labels. Read straight from the file the examples come out
+    # grouped -- every YES, then every NO -- so the last thing the model sees
+    # before the question is a run of 14 NOs. Block-ordered demonstrations bias
+    # few-shot models toward the trailing label, which is the exact direction
+    # (over-flagging as filler) this classifier kept failing in. Deterministic
+    # alternation keeps the prompt constant across runs.
+    yes = [x for x in pairs if x[1] == "REFERENTIAL"]
+    no = [x for x in pairs if x[1] != "REFERENTIAL"]
+    out, i, j = [], 0, 0
+    while i < len(yes) or j < len(no):
+        if i < len(yes):
+            out.append(yes[i]); i += 1
+        if j < len(no):
+            out.append(no[j]); j += 1
+    return out
 
 
 def cache_path(cfg, model_id):
@@ -437,10 +453,25 @@ def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
     # everything as filler. add_generation_prompt=True opens the assistant turn,
     # so the very next token is the answer we score.
     def wrap(text):
+        msgs = [{"role": "user", "content": text}]
+        # enable_thinking=False is REQUIRED for hybrid reasoning models.
+        #
+        # Qwen3's default template ends at "<|im_start|>assistant\n", so the
+        # model's next token is "<think>" -- and this code scores the next token
+        # for YES vs NO. Comparing two tokens the model has no intention of
+        # emitting yields a flat, meaningless signal: Qwen3-32B returned
+        # P(filler) < 0.1 for every message in the self-test, filler included.
+        # Passing False emits an EMPTY "<think></think>" block, so the very next
+        # token is the answer. Models without the flag raise TypeError.
         try:
-            return tok.apply_chat_template(
-                [{"role": "user", "content": text}],
-                tokenize=False, add_generation_prompt=True)
+            return tok.apply_chat_template(msgs, tokenize=False,
+                                           add_generation_prompt=True,
+                                           enable_thinking=False)
+        except TypeError:
+            pass
+        try:
+            return tok.apply_chat_template(msgs, tokenize=False,
+                                           add_generation_prompt=True)
         except Exception:
             return text + "\nAnswer:"
     prompts = [wrap(items[i][1]) for i in todo_idx]
