@@ -38,7 +38,7 @@ d_players_exit <- d_players |>
 d_players <- d_players |> select(-exitSurvey) |> left_join(d_players_exit)
 
 d_round <- d_round_raw |>  select(roundID = id, correct, gameID, index, numTrials, repNum, 
-                                  response, target, targetNum, trialNum, tangramURLs)
+                                  response, target, targetNum, trialNum, tangramURLs, director)
 
 d_chat <- d_round_raw |>  select(roundID = id, chat, director) |>  filter(!is.na(chat)) |> 
   mutate(chat = map(chat, ~ fromJSON(.) %>% as.data.frame())) %>% 
@@ -47,7 +47,6 @@ d_chat <- d_round_raw |>  select(roundID = id, chat, director) |>  filter(!is.na
   mutate(director_msg = (id == director),
          chit_chat = FALSE) %>% 
   select(roundID, text, playerID = id, director_msg, chit_chat)
-
 
 
 # write preprocessed CSVs

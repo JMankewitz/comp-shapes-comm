@@ -117,7 +117,10 @@ def images_for(set_ids, by_id):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--n-sets", type=int, required=True, help="8 for the pilot, ~75 for the full study")
+    p.add_argument("--n-sets", type=int, default=8, help="8 for the pilot, ~75 for the full study")
+    p.add_argument("--set-ids", type=str, default=None,
+                   help="explicit comma-separated set_ids for this wave (overrides --select); "
+                        "produced by scripts/plan_next_wave.py")
     p.add_argument("--select", choices=("best", "random"), default="best",
                    help="'best' = lowest max similarity (default); 'random' = seeded uniform sample")
     p.add_argument("--seed", type=int, default=20260821, help="only used with --select random")
@@ -139,8 +142,15 @@ def main():
     check_pairing(comp_by_id, noncomp_by_id)
     print(f"loaded {len(comp_by_id)} paired sets, pairing verified")
 
-    set_ids = select_set_ids(comp_by_id, noncomp_by_id, args.n_sets, args.select, args.seed)
-    print(f"selected {len(set_ids)} set_ids via --select {args.select}: {set_ids}")
+    if args.set_ids:
+        set_ids = sorted(int(x) for x in args.set_ids.split(",") if x.strip())
+        missing = [s for s in set_ids if s not in comp_by_id]
+        if missing:
+            sys.exit(f"set_ids not present in the pool: {missing}")
+        print(f"using {len(set_ids)} explicit set_ids: {set_ids}")
+    else:
+        set_ids = select_set_ids(comp_by_id, noncomp_by_id, args.n_sets, args.select, args.seed)
+        print(f"selected {len(set_ids)} set_ids via --select {args.select}: {set_ids}")
 
     comp_imgs = images_for(set_ids, comp_by_id)
     noncomp_imgs = images_for(set_ids, noncomp_by_id)

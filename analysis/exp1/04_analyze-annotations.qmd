@@ -104,11 +104,18 @@ d_annotations_overall<- d_annotations_full |>
     legend.position = "none",
     panel.grid.major.x = element_blank()
   )
+  
+sprintf("A small sample (n = %d) of the final descriptions from games in each condition were coarsely annotation by the first author to explore whether this difference in similarity measure accurately captures the strategies used by dyads in this task. We found that %d \%", length(unique(d_annotations_by_game$gameID)), )
+
+sprintf("A small sample (n = %d) of the final descriptions from games in each condition were coarsely annotation by the first author to explore whether this difference in similarity measure accurately captures the strategies used by dyads in this task. We found that XX of final-round descriptions from the across-trial condition described either a top component or bottom component alone while XX of descriptions in the within-trial condition used both a descriptin of the top shape and a description of the bottom shape. In the non-compositional baseline condition, however, participants used holistic descriptions XX of the time, both top and bottom descriptions XX% of the time, and isolated top or bottom descriptions XX of the time.", length(unique(d_annotations_by_game$gameID)))
 ```
 In-text description: 
 
-A small sample (10%) of the final descriptions from games in each condition were coarsely annotation by the first author to explore whether this difference in similarity measure accurately captures the strategies used by dyads in this task. We found that XX% of final-round descriptions from the across-trial condition described either a top component or bottom component alone while XX% of descriptions in the within-trial condition used both a descriptin of the top shape and a description of the bottom shape. In the non-compositional baseline condition, however, participants used holistic descriptions XX% of the time, both top and bottom descriptions XX% of the time, and isolated top or bottom descriptions XX% of the time.
+A small sample (n = 30) of the final descriptions from games in each condition were coarsely annotated by the first author to explore whether this difference in similarity measure accurately captures the strategies used by dyads in this task. We found that 69.2% of final-round descriptions from the across-trial condition described either a top component or bottom component alone while 89.7% of descriptions in the within-trial condition used both a descriptin of the top shape and a description of the bottom shape. In the non-compositional baseline condition, however, participants used holistic descriptions 41.5% of the time, both top and bottom descriptions 15.7% of the time, and isolated top or bottom descriptions 42.7% of the time.
 
+```{r}
+d_annotations_overall |> mutate(percent = annotation_prop * 100) |> select(-c(annotation_n, total, annotation_prop)) |> pivot_wider(names_from = annotation_collapsed, values_from = percent)
+```
 
 ```{r}
 ggplot(d_annotations_by_game_clean, 

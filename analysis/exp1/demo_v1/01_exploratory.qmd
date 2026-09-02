@@ -1,0 +1,32 @@
+```{r}
+library(tidyverse)
+library(here)
+```
+
+```{r}
+experiment_name <- "demo_v1"
+  
+processed_data_folder <- here("data/processed_data", experiment_name)
+```
+
+```{r}
+d_game <- read_csv(here(processed_data_folder, "games.csv"))
+d_round <- read_csv(here(processed_data_folder, "rounds.csv"))
+d_chat <- read_csv(here(processed_data_folder, "chats.csv"))
+d_players <- read_csv(here(processed_data_folder, "players.csv"))
+
+d_round <- d_round |> left_join(d_game)
+```
+
+```{r}
+d_round_clean <-  d_round |> 
+  group_by(gameID) |> 
+  mutate(n_complete_rounds = sum(!is.na(response))) |> 
+  filter(n_complete_rounds > 16) # only keep rounds that have enough responses
+```
+
+```{r}
+d_round_clean |> ggplot(aes(x = trialNum, y = correct)) + 
+  
+```
+

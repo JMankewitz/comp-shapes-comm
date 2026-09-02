@@ -307,6 +307,21 @@ def sample_shots(gold=None, n=None, seed=0):
     return out
 
 
+def config_fingerprint(cfg, shots):
+    """Identifies WHAT produced a set of labels: model, prompt text, examples.
+
+    A cache is only reusable if all three are unchanged. Without this, editing a
+    prompt or swapping examples and re-running silently resumes the old scores
+    and reports them as new -- which has now happened three times, once masking a
+    broken thinking-mode run whose numbers looked like a real result.
+    """
+    import hashlib
+    parts = [cfg["referential"]["model"], PROMPT_STYLE,
+             PROMPT_MINIMAL if PROMPT_STYLE == "minimal" else PROMPT_HEADER,
+             "|".join(f"{t}=>{l}" for t, l in shots)]
+    return hashlib.sha1("\n".join(parts).encode()).hexdigest()[:12]
+
+
 def cache_path(cfg, model_id):
     """Where partial labels live. Keyed by MODEL -- a different model is a
     different labelling, and silently reusing another model's decisions would be
@@ -323,7 +338,7 @@ def cache_path(cfg, model_id):
 
 
 def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
-              threshold=0.5):
+              threshold=0.5, fingerprint=None):
     """Label texts with a local instruct model. Returns list of bools (True=filler).
 
     RESUMABLE. Partial results are flushed to `cache_file` every `flush_every`
@@ -340,6 +355,17 @@ def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
             prev = pd.read_parquet(cache_file)
             # Older caches stored a bool; newer ones store P(filler) so the
             # threshold can be moved without re-running the model.
+            stale = (fingerprint is not None
+                     and "fingerprint" in prev.columns
+                     and len(prev) and prev["fingerprint"].iloc[0] != fingerprint)
+            if stale:
+                print(f"  cache was built with a DIFFERENT prompt/model "
+                      f"({prev['fingerprint'].iloc[0]} != {fingerprint}); ignoring it "
+                      f"and re-scoring from scratch")
+                prev = prev.iloc[0:0]
+            elif fingerprint is not None and "fingerprint" not in prev.columns:
+                print("  cache predates fingerprinting; ignoring it to be safe")
+                prev = prev.iloc[0:0]
             if "p_filler" in prev.columns:
                 done = dict(zip(prev["text"], prev["p_filler"].astype(float)))
             else:
@@ -366,7 +392,8 @@ def llm_label(items, cfg, shots, batch_size=32, cache_file=None, flush_every=10,
             return
         pd.DataFrame({"text": list(done.keys()),
                       "p_filler": list(done.values()),
-                      "chit_chat": [v > threshold for v in done.values()]}).to_parquet(
+                      "chit_chat": [v > threshold for v in done.values()],
+                      "fingerprint": fingerprint}).to_parquet(
             cache_file + ".tmp", index=False)
         os.replace(cache_file + ".tmp", cache_file)
 
@@ -598,7 +625,8 @@ def classify(df, cfg, use_llm=True, gold_for_shots=None, batch_size=32,
 
         preds = llm_label(items, cfg, shots, batch_size,
                           cache_file=cache_path(cfg, cfg["referential"]["model"]),
-                          threshold=float(cfg["referential"].get("threshold", 0.5)))
+                          threshold=float(cfg["referential"].get("threshold", 0.5)),
+                          fingerprint=config_fingerprint(cfg, shots))
         df.loc[need.index, "_llm"] = preds
     else:
         if len(need):
@@ -647,6 +675,59 @@ SELF_TEST = [
 ]
 
 
+def debug_tokens(cfg, k=10):
+    """What does the model actually want to say? Prints top-k next tokens.
+
+    Logit scoring compares P(YES) against P(NO) at the first answer position.
+    That is only meaningful if the model INTENDS to emit one of them. If its real
+    preference is "Yes", "**", or "The", both candidates sit far down the
+    distribution and their ratio reflects token frequency rather than the answer
+    -- which looks exactly like a confident classifier returning a near-constant
+    probability for every input.
+    """
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import torch
+
+    model_id = cfg["referential"]["model"]
+    tok = AutoTokenizer.from_pretrained(model_id)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    tok.padding_side = "left"
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, dtype=torch.bfloat16, device_map="auto")
+    except TypeError:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id, torch_dtype=torch.bfloat16, device_map="auto")
+    model.eval()
+
+    shots = sample_shots()
+    for text, gold in SELF_TEST[:6]:
+        prompt = build_prompt([text], shots)
+        msgs = [{"role": "user", "content": prompt}]
+        try:
+            full = tok.apply_chat_template(msgs, tokenize=False,
+                                           add_generation_prompt=True,
+                                           enable_thinking=False)
+        except TypeError:
+            full = tok.apply_chat_template(msgs, tokenize=False,
+                                           add_generation_prompt=True)
+        enc = tok(full, return_tensors="pt", add_special_tokens=False).to(model.device)
+        with torch.no_grad():
+            logits = model(**enc).logits[0, -1, :]
+        probs = torch.softmax(logits.float(), dim=-1)
+        top = torch.topk(probs, k)
+        print(f"\n  {text!r}  (gold={'FILLER' if gold else 'REFERENTIAL'})")
+        print("     top tokens: " + ", ".join(
+            f"{tok.decode([i])!r}:{p:.3f}" for p, i in zip(top.values.tolist(),
+                                                           top.indices.tolist())))
+        for w in ("YES", "NO", "Yes", "No", "yes", "no"):
+            wid = tok.encode(w, add_special_tokens=False)
+            if len(wid) == 1:
+                print(f"     P({w!r}) = {probs[wid[0]].item():.5f}", end="")
+        print()
+
+
 def self_test(cfg, batch_size):
     """Boundary cases run through the REAL pipeline, printed with verdicts.
 
@@ -689,12 +770,21 @@ def main():
                     help="minimal asks the one question the task is; full is the "
                          "rule-laden version whose FILLER bullet taught a 7B model "
                          "to drop every message starting with 'no'")
+    ap.add_argument("--debug-tokens", action="store_true",
+                    help="print the model's ACTUAL top next-token predictions for "
+                         "the self-test cases. Logit scoring is only valid if the "
+                         "model intends to emit one of the two candidates; if it "
+                         "wants 'Yes' or '**' instead, the YES/NO ratio is noise.")
     ap.add_argument("--self-test", action="store_true",
                     help="run 9 boundary cases through the model and stop")
     args = ap.parse_args()
     global PROMPT_STYLE
     PROMPT_STYLE = args.prompt
     cfg = load_config(args.config)
+
+    if args.debug_tokens:
+        debug_tokens(cfg)
+        return
 
     if args.self_test:
         self_test(cfg, args.batch_size)
