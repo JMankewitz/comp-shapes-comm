@@ -109,6 +109,23 @@ Pull the latest (from `~/comp-shapes-comm` on the VM):
 git fetch --depth 1 origin master && git reset --hard origin/master
 ```
 
+**Wipe the datastore, THEN build.** `tajriba.json` must be removed before
+bundling and serving — it grows ~0.5 MB/min and carries the previous wave's
+state, including the set tally in globals.
+
+> **Export first.** Deleting `tajriba.json` destroys the wave it holds. Run
+> `empirica export` on the VM and ingest it locally BEFORE this step, or that
+> wave's data is gone. Confirm the export landed (`ingest_exports.py` shows the
+> wave, and `payments.csv` exists for it) before running the `rm`.
+
+```bash
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && rm -f .empirica/local/tajriba.json
+```
+
+Wiping resets the runtime set tally to zero, so run `plan_next_wave.py --write`
+and push the new schedule BEFORE this, or the next wave restarts at the front of
+the old schedule and re-collects sets you already have.
+
 **Build on the VM.** The bundle is gitignored (`*.tar.zst`), so it is never
 pushed or pulled — each host builds its own from the source it just checked out.
 
@@ -170,7 +187,13 @@ credentials.
 
 `[L]` = laptop, `[VM]` = server. Run top to bottom.
 
-**1. Export** the finished wave from the admin UI: <http://34.135.228.108:3001/admin>
+**1. [VM] Export** the finished wave. This is a command-line step, not an admin
+UI one — it drops a timestamped zip into the experiment directory, which is
+exactly where `ingest_exports.py` looks for it.
+
+```bash
+cd ~/comp-shapes-comm/experiments/compositional-tangrams-v2 && empirica export
+```
 
 **2. [L]** Pull + unpack + preprocess every new export:
 
@@ -413,7 +436,7 @@ not from Exp 1's numbers. The pilot's measured median was 38.4 min.
 
 ## Getting data back
 
-Export from the admin UI first, then from your laptop:
+Run `empirica export` on the VM first, then from your laptop:
 
 ```bash
 gcloud compute scp --zone=us-central1-f --project=hs-social-interaction-lab "social-interaction-lab-small-runs:~/comp-shapes-comm/experiments/compositional-tangrams-v2/*.zip" ./vm_exports/

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tangram Annotation Tool</title>
+  <script src="https://unpkg.com/jspsych@7.3.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-button-response"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-html-form"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <link href="https://unpkg.com/jspsych@7.3.0/css/jspsych.css" rel="stylesheet">
+  <style>
+    body {
+      padding-bottom: 80px;
+    }
+    .image-row {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      margin-top: 1em;
+    }
+    .target-box {
+      border: 4px solid red;
+      padding: 2px;
+    }
+    img {
+      height: 150px;
+    }
+    .rotated {
+      transform-origin: center center;
+      display: inline-block;
+    }
+    .chat-box {
+      font-style: italic;
+      margin-top: 1em;
+    }
+    .form-section {
+      margin-top: 1em;
+    }
+  </style>
+</head>
+<body>
+  <div id="jspsych-target"></div>
+
+  <script>
+    window.onload = () => {
+      // ✅ Inject the save button immediately
+      const saveBtn = document.createElement('button');
+      saveBtn.id = 'save-button';
+      saveBtn.innerText = '💾 Save Progress Now';
+      Object.assign(saveBtn.style, {
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        padding: '10px 15px',
+        backgroundColor: '#4CAF50',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        zIndex: '9999'
+      });
+      document.body.appendChild(saveBtn);
+
+      // ✅ Click handler for save button
+      document.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'save-button') {
+          const annotated = jsPsych.data.get().filter({ trial_type: 'survey-html-form' }).values();
+          if (annotated.length === 0) {
+            alert("No annotations yet to save!");
+            return;
+          }
+
+          const csvHeader = Object.keys(annotated[0]).join(',') + '\n';
+          const csvRows = annotated.map(row =>
+            Object.values(row).map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')
+          );
+          const csv = csvHeader + csvRows.join('\n');
+
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'tangram_annotations.csv';
+          a.click();
+        }
+      });
+
+      // ✅ Start jsPsych
+      const jsPsych = initJsPsych({
+        display_element: 'jspsych-target'
+      });
+
+      const getAdjustedLabels = (rotation) => {
+        switch (rotation % 360) {
+          case 90: return { top: 'right', bottom: 'left', both: 'right and left' };
+          case 180: return { top: 'bottom', bottom: 'top', both: 'top and bottom' };
+          case 270: return { top: 'left', bottom: 'right', both: 'left and right' };
+          default: return { top: 'top', bottom: 'bottom', both: 'top and bottom' };
+        }
+      };
+
+      const startScreen = {
+        type: jsPsychHtmlButtonResponse,
+        stimulus: '<p>Upload your CSV file to begin annotation.</p>',
+        choices: ['Upload CSV'],
+        on_finish: () => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.csv';
+          input.onchange = e => {
+            const file = e.target.files[0];
+            Papa.parse(file, {
+              header: true,
+              complete: results => {
+                const rows = results.data.filter(row => row.roundID && row.target && row.tangramURLs);
+                const trials = rows.map(row => {
+                  return {
+                    roundID: row.roundID,
+                    director_msg: row.text,
+                    target: row.target.replace(/^\//, ''),
+                    rotation: parseInt(row.rotation || '0'),
+                    tangramURLs: row.tangramURLs
+                      .replace(/[[\]"]/g, '')
+                      .split(',')
+                      .map(s => s.trim().replace(/^\//, ''))
+                  };
+                });
+                runAnnotationTrials(trials);
+              }
+            });
+          };
+          input.click();
+        }
+      };
+
+      jsPsych.run([startScreen]);
+
+      function runAnnotationTrials(trials) {
+        const timeline = [];
+
+        trials.forEach((trial, index) => {
+          const labels = getAdjustedLabels(trial.rotation);
+
+          const images = trial.tangramURLs.map(url => {
+            const isTarget = url === trial.target;
+            return `<div class='${isTarget ? "target-box" : ""}'>
+                      <img class='rotated' style='transform: rotate(${trial.rotation}deg);' src='${url}'>
+                    </div>`;
+          });
+
+          timeline.push({
+            type: jsPsychSurveyHtmlForm,
+            preamble: `
+              <h3>Trial ${index + 1} of ${trials.length} — Round: ${trial.roundID}</h3>
+              <div class="image-row">${images.join('')}</div>
+              <div class="chat-box">Director message: "${trial.director_msg}"</div>
+            `,
+            html: `
+              <div class="form-section">
+                <label for="annotation">Select annotation:</label>
+                <select name="annotation" required>
+                  <option value="">--Please choose--</option>
+                  <option value="holistic">Holistic description</option>
+                  <option value="top">Contains ${labels.top} alone</option>
+                  <option value="bottom">Contains ${labels.bottom} alone</option>
+                  <option value="top_bottom">Describes ${labels.both}</option>
+                  <option value="idk">I don't know / need to look later</option>
+                </select>
+              </div>
+            `,
+            data: {
+              trial_index: index,
+              roundID: trial.roundID,
+              target: trial.target,
+              rotation: trial.rotation,
+              tangramURLs: trial.tangramURLs.join(','),
+              director_msg: trial.director_msg
+            },
+            on_finish: data => {
+              const formData = data.response;
+              const reverseMap = {
+                [`Contains ${labels.top} alone`]: 'top',
+                [`Contains ${labels.bottom} alone`]: 'bottom',
+                [`Describes ${labels.both}`]: 'top_bottom',
+                'Holistic description': 'holistic',
+                "I don't know / need to look later": 'idk'
+              };
+              data.annotationLabel = formData.annotation;
+              data.annotation = reverseMap[formData.annotation] || formData.annotation;
+            }
+          });
+        });
+
+        timeline.push({
+          type: jsPsychHtmlButtonResponse,
+          stimulus: `
+            <h3>✅ All trials complete!</h3>
+            <p>Click the green “💾 Save Progress Now” button below to download your annotations.</p>
+          `,
+          choices: ['Finish']
+        });
+
+        jsPsych.run(timeline);
+      }
+    };
+  </script>
+</body>
+</html>

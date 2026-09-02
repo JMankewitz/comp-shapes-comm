@@ -1,6 +1,6 @@
 {
   "schema_version": "exp2-schedule-1",
-  "generated": "2026-08-28",
+  "generated": "2026-09-02",
   "source_schema_version": "exp2-1",
   "selection": {
     "method": "best",
@@ -15,7 +15,6 @@
     "noncomp"
   ],
   "set_ids": [
-    2,
     3,
     4,
     5,
@@ -89,7 +88,8 @@
     73,
     74,
     75,
-    76
+    76,
+    77
   ],
   "notes": "Only these set_ids have images deployed to client/public/tangrams. Re-run scripts/deploy_exp2_images.py before widening the pool."
 }
