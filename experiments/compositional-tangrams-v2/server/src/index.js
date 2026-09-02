@@ -58,7 +58,29 @@ setLogLevel(argv["loglevel"] || "info");
   // batches only as the running ones fill. A batch contributes its games as
   // soon as it is STARTED, so a reserve batch must be left unstarted.
   //
-  // neverOverbookGames ON. Batches are walked IN ORDER and the loop returns on
+  // neverOverbookGames is OFF -- it is BROKEN in @empirica/core 1.12.1. Do not
+  // turn it back on without checking the dist first. In assignplayer():
+  //
+  //   if (filteredGames.length === 0) {
+  //     if (neverOverbookGames) { availableGames = []; }   // meant to skip batch
+  //   }
+  //   ...
+  //   const game = pickRandom(availableGames);   // pickRandom([]) -> undefined
+  //   await game.assignPlayer(player);           // TypeError, callback dies
+  //
+  // Setting availableGames = [] was intended to fall through to the next batch,
+  // but nothing re-checks it, so it reaches pickRandom on an empty array. The
+  // throw is swallowed by Empirica's callback wrapper, leaving the player
+  // assigned to NOTHING and never advanced to the overflow batch -- the exact
+  // opposite of the intent. Observed live 2026-08-28 as:
+  //   ERR TypeError: Cannot read properties of undefined (reading 'assignPlayer')
+  //
+  // Overbooking is the working behaviour, and its cost is mild: surplus players
+  // land in already-full games in the current batch rather than flowing to the
+  // next one. The reasoning below is why it was tried; it stands EXCEPT that the
+  // flag does not work.
+  //
+  // Batches are walked IN ORDER and the loop returns on
   // the first assignment, so batch 2 is only reached when batch 1 has no
   // assignable games -- a reserve batch does work as a reserve. But when every
   // game in batch 1 is full-but-unstarted, filteredGames is empty and the
@@ -79,10 +101,7 @@ setLogLevel(argv["loglevel"] || "info");
   // Cost: overbooking was the cheap insurance for someone abandoning during the
   // intro steps. That is still covered -- an abandoned seat leaves the game
   // non-full, so the next arrival fills it; it just is not pre-staffed.
-  ctx.register(Classic({
-    preferUnderassignedGames: true,
-    neverOverbookGames: true,
-  }));
+  ctx.register(Classic({ preferUnderassignedGames: true }));
   ctx.register(Lobby());
   ctx.register(Empirica);
   ctx.register(function (_) {

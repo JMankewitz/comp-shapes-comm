@@ -175,7 +175,7 @@ credentials.
 **2. [L]** Pull + unpack + preprocess every new export:
 
 ```bash
-python3 scripts/ingest_exports.py --into pilot_v1 --preprocess
+python3 scripts/ingest_exports.py --into full_sample --preprocess
 ```
 
 **3. [L]** Pay this wave now — don't wait for the study to end.
@@ -197,7 +197,9 @@ for anything you want to check by hand. Anyone under ~25 min is flagged CHECK.
 **3b. [L]** After Prolific confirms the payments went through:
 
 ```bash
-python3 scripts/mark_paid.py pilot_v1/<wave>
+python3 scripts/mark_paid.py full_sample/<wave>
+
+python3 scripts/mark_paid.py full_sample/2026-08-28-20-31-40
 ```
 
 Only run this once the money has actually landed. The ledger exists to stop the
