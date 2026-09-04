@@ -222,7 +222,7 @@ for anything you want to check by hand. Anyone under ~25 min is flagged CHECK.
 ```bash
 python3 scripts/mark_paid.py full_sample/<wave>
 
-python3 scripts/mark_paid.py full_sample/2026-08-28-20-31-40
+python3 scripts/mark_paid.py full_sample/2026-09-02-20-13-05
 ```
 
 Only run this once the money has actually landed. The ledger exists to stop the
@@ -261,11 +261,19 @@ assign a dyad to set 40 and serve them broken images; the schedule's own `notes`
 field says as much. Widening the pool means widening both, and the VM has ~938 MB
 free — check `df -h /` before a large jump.
 
-**5. [L]** Deploy images for the sets step 4 chose. Use the exact
-`--set-ids` line `plan_next_wave.py` printed:
+**5. [L]** Deploy images **only if step 4 said some are missing**, and only for
+the ids it named. Step 4 checks `client/public/tangrams` against the schedule
+and prints one of:
+
+- `images: all N sets already deployed -- nothing to do.` — skip this step
+- `K of these N sets have images missing. Deploy just those:` — run what it prints
+
+The schedule is deliberately longer than any single wave (depth-first allocation
+just stops partway down it), so most of its sets are never reached and deploying
+their images is wasted work.
 
 ```bash
-python3 scripts/deploy_exp2_images.py --set-ids 2,3,4,5,6,7,8,9
+python3 scripts/deploy_exp2_images.py --set-ids <only the ids step 4 named>
 ```
 
 **Do not pass `--n-sets` here.** Both scripts write the same
