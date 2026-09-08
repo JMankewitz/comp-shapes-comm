@@ -45,42 +45,56 @@ Replaces Exp 1's hand coding (44,534 messages read by hand, 1,611 marked). Write
 mutate preprocessed data.
 
 **The operative distinction is not "is this a greeting".** It is *does this
-message carry information about the target shape's appearance* — learned from the
-gold labels, not invented. Task-coordination talk is FILLER even though it is
-on-task:
+message say anything about what the target shape looks like* — learned from 400
+in-domain hand labels, not invented. Task-coordination talk is FILLER even though
+it is on-task, and that is the whole of the model's job:
 
 | | |
 |---|---|
-| `"for me its top right"` | FILLER — position on the SCREEN |
-| `"triangle on the left side"` | REFERENTIAL — position within the SHAPE |
-| `"alright now you're the matcher"` | FILLER |
-| `"did it freeze up for you too"` | FILLER |
+| `"press it"` / `"you have to click it"` | FILLER — the interface, not the shape |
+| `"as the director"` | FILLER — role coordination |
+| `"not the same number"` | FILLER — how the last round went |
+| `"no boat"` / `"no white gaps"` | REFERENTIAL — negation carrying content |
+| `"bat"` / `"the claw"` / `"Big W"` | REFERENTIAL — conventionalised nicknames |
 
-Two stages. **Rules** fire only on strings that cannot be referential under any
-reading (greetings, acknowledgements, bare punctuation) — narrow by design, since
+Two stages. A **rule** fires only on strings that cannot be referential under any
+reading (greetings, bare acknowledgements, punctuation) — narrow by design, since
 a rule hit gets no review. Everything else, including anything with shape content,
-goes to the **model**. Few-shot examples are sampled from Exp 1's gold labels at
-runtime, so the boundary encoded in the prompt is Jess's rather than the prompt
-author's.
+goes to the **model** with its round transcript as context. Few-shot examples are
+hand-written in `fewshot_examples.csv`, deliberately NOT drawn from the labelled
+data, so nothing leaks into the evaluation.
 
-### What the gold set can and cannot validate
+### What it is validated against
 
-Measured before building this:
+`data/processed_data/exp_2/annotation/dev_labels.csv` — 400 pilot director
+messages hand-labelled in September 2026. **Not Exp 1's `chit_chat` column**: it
+misses ~32% of even the most obvious filler, its errors run almost entirely one
+way (so precision against it is uninterpretable), and Exp 2 is no longer being
+compared to Exp 1.
 
-- Restricted to **director** messages, coverage is good: of unambiguous filler,
-  **87%** is labeled when it stands alone in a round, **61%** when it sits beside
-  other messages.
-- **Matcher** messages are effectively unannotated — 7,024 messages, 0.6% marked,
-  and mostly "ok"/"?" acknowledgements that plainly are filler.
+Two sheets, and they are **not interchangeable**:
 
-So validation runs on director messages only, and a residual 10–15% disagreement
-is gold-set noise, not classifier error. **Do not tune past it** — that is fitting
-the annotation's mistakes. Watch precision on the chit-chat class; at a 4% base
-rate accuracy is meaningless (always-REFERENTIAL scores 96%).
+- **sheet A** — 300 uniform random. Its base rate is the corpus base rate, so it
+  is the only source of a number you may report.
+- **sheet B** — 100 over-sampled hard cases. Diagnostic only; its base rate is
+  fabricated by construction and averaging it into A corrupts every rate.
 
-Rules alone, scored on 37,449 director messages: **precision 0.660, recall 0.322**.
-Low recall is the point — the rules deliberately punt anything interesting to the
-model.
+Measured filler rate: **3.05% [1.86, 4.25]** post-stratified over the pilot
+(sheet A alone: 1.67% [0.71, 3.84]). It is concentrated — the 77% of the corpus
+that is not short, negated, or task-talk is **99.2% description**.
+
+**At a 3% base rate the asymmetry governs everything.** Keeping a stray "ok" adds
+3% noise; dropping a real description destroys the measurement. An earlier
+Qwen2.5-7B run flagged 36–49% of messages — it would have deleted 600–1,700 real
+descriptions to remove ~100 fillers. Watch **precision** and the by-length table,
+not F1. `--validate` prints both, plus a threshold sweep and every disagreement.
+
+Rule layer alone, scored on those 400: sheet A **recall 0.400, precision 0.667**;
+sheet B **recall 0.474, precision 0.900**. Its only two false drops in 400 are a
+bare `yes` and a bare `no` answering a matcher's question about the shape — cases
+Jess's own labels split 7:2 on, so the rule settles a coin flip rather than
+getting them wrong. The model's job is to lift recall to ~0.9 without adding
+false positives.
 
 ### Avoid the two Volta nodes in the jag queue
 
@@ -118,25 +132,44 @@ after a minute of weight loading.
 python analysis/exp2/02_referential_filter.py --self-test
 ```
 
-Nine boundary cases with verdicts printed. This exists because **a model too
-small for the task answers REFERENTIAL to everything**, which produces a
+Eleven boundary cases with verdicts and probabilities printed, held out from
+`fewshot_examples.csv` on purpose. This exists because **a model too small for
+the task answers REFERENTIAL to everything**, which at a 3% base rate produces a
 plausible-looking output file ("only 2% was filler") rather than an error.
-Qwen2.5-0.5B scores 4/9, missing every FILLER case. Expect ≥7/9 before committing.
-The run also warns if fewer than 0.5% of undecided texts come back as filler, and
-counts any batch where the model returned fewer labels than inputs.
+Qwen2.5-0.5B scores 4/11. Expect ≥9/11 before committing a full run.
+
+It also warns if every case scores the same side — a flat signal means the model
+is not trying to emit YES or NO at all, which is what a hybrid reasoning model
+does when `enable_thinking=False` fails to apply. `--debug-tokens` then prints
+the model's actual top next-token predictions, which is the fastest way to tell
+a bad classifier apart from a broken scoring path. The Qwen3-32B numbers on
+record before this rewrite were the broken path: eleven self-test cases, P(filler)
+under 0.02 for every one, filler included.
 
 ```bash
-# rules only -- no model needed, sanity-checks the plumbing
-python analysis/exp2/02_referential_filter.py --validate --no-llm
+# rules only -- no model, no GPU, runs on your laptop in seconds.
+# Sanity-checks the plumbing and prints the baseline the model has to beat.
+/opt/anaconda3/bin/python analysis/exp2/02_referential_filter.py --validate --no-llm
 
-# full classifier against Exp 1's hand labels
-nlprun -q jag -g 1 -r 60G -c 8 -p low -a compshapes-nlp \
+# full classifier against the 400 hand labels
+nlprun -q jag -g 2 -r 100G -c 8 -p low -a compshapes-nlp \
     'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/02_referential_filter.py --validate'
 
 # label Exp 2
-nlprun -q jag -g 1 -r 60G -c 8 -p low -a compshapes-nlp \
+nlprun -q jag -g 2 -r 100G -c 8 -p low -a compshapes-nlp \
     'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/02_referential_filter.py'
 ```
+
+### Qwen3-32B needs two cards
+
+bf16 weights alone are ~66 GB, so `-g 1` OOMs on every card in the jag queue.
+`device_map="auto"` shards across whatever it is given, so `-g 2` works. If the
+queue is busy, `Qwen3-14B` is ~28 GB and fits one card — and for a binary
+judgement scored off two logits it may well be enough. Set
+`referential.model` in `config.yaml` and run `--validate` for each; the harness
+answers the question in one job rather than by argument.
+
+
 
 ⚠️ **Back up `data/processed_data/exp_1/run_v3/*/chats.csv` before touching
 `analysis/exp1/00_preprocessing.R`.** It hardcodes `chit_chat = FALSE`, so

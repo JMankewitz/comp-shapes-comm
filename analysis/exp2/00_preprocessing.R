@@ -107,14 +107,57 @@ d_game <- d_game_raw |>
          any_of(c("trainingRoundsCompleted", "trainingRoundsExpected", "endedReason")))
 
 # ---- players --------------------------------------------------------------
+# PROLIFIC ID: prefer the URL, fall back to what they typed.
+#
+# Exp 2 collects the ID via the PlayerCreate form, which means participants can
+# and do get it wrong -- one pasted the STUDY url into the field, completed the
+# whole study, and could not be paid or counted because the value failed the
+# 24-hex check. Prolific also passes the real ID in the launch URL, which
+# Empirica stores in `urlParams` as `participantKey`, and that value cannot be
+# mistyped.
+#
+# Checked across 280 player rows: 265 have a valid participantKey, 269 a valid
+# form entry, and in ZERO cases do both parse as valid IDs and disagree. So the
+# two are interchangeable when present, and preferring the URL with the form as
+# fallback recovers the union rather than either alone.
+id_ok <- function(x) str_detect(str_to_lower(coalesce(x, "")), "^[0-9a-f]{24}$")
+
+d_prolific <- d_player_raw |>
+  select(playerID = id, urlParams, participantIdentifier) |>
+  mutate(
+    parsed = parse_json_col(urlParams),
+    from_url = map_chr(parsed, ~ if (is.null(.x$participantKey)) NA_character_
+                                 else as.character(.x$participantKey)),
+    # Prolific sometimes sends the ID in email form; the local part is the ID.
+    from_form = str_split_i(coalesce(participantIdentifier, ""), "@", 1),
+    prolificID = case_when(
+      id_ok(from_url)  ~ from_url,
+      id_ok(from_form) ~ from_form,
+      # Neither is a valid ID: keep whatever they typed so the row is still
+      # traceable by hand, rather than silently becoming NA.
+      TRUE             ~ coalesce(na_if(from_form, ""), participantIdentifier)
+    ),
+    id_source = case_when(id_ok(from_url) ~ "url",
+                          id_ok(from_form) ~ "form",
+                          TRUE ~ "unrecognised")
+  ) |>
+  select(playerID, prolificID, id_source)
+
+if (any(d_prolific$id_source != "url")) {
+  d_prolific |> count(id_source) |>
+    mutate(line = sprintf("  prolific ID from %-12s %d", id_source, n)) |>
+    pull(line) |> walk(message)
+}
+
 d_players <- d_player_raw |>
-  select(playerID = id, gameID, prolificID = participantIdentifier,
+  select(playerID = id, gameID,
          bonus, score, role, rotation,
          completedStudy, finishedTraining, ended,
          pretestItemGap, posttestItemGap,
          pretestCardShownAt, pretestStartedAt, pretestSubmittedAt,
          trainingStartedAt,
          any_of(c("roundsInactive", "exitStepDone"))) |>
+  left_join(d_prolific, by = "playerID") |>
   # Where a player stopped, as a single categorical rather than four timestamps
   # to eyeball. `entered_training` is the normal case; everything before it is a
   # player who never reached a trial, which in the pilot was 2 of 6 timeouts and

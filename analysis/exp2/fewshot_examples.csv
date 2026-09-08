@@ -1,31 +1,37 @@
 text,label,stratum,why
-triangle balancing,REFERENTIAL,short_convention,"two-word conventionalised label - brevity is not filler"
-arrow down,REFERENTIAL,short_convention,"minimal late-block convention"
+triangle balancing,REFERENTIAL,short_convention,two-word conventionalised label - brevity is not filler
+arrow down,REFERENTIAL,short_convention,minimal late-block convention
 white square,REFERENTIAL,short_convention,"two words, still a description"
-M,REFERENTIAL,letter_shape,"single letter naming the shape's form - shapes look like letters"
-diamond bottom,REFERENTIAL,within_shape_position,"position WITHIN the shape"
+M,REFERENTIAL,letter_shape,single letter naming the shape's form - shapes look like letters
+diamond bottom,REFERENTIAL,within_shape_position,position WITHIN the shape
 triangle on the left side,REFERENTIAL,within_shape_position,"'left' here is part of the shape, not the screen"
-looks like a bird with its wings out,REFERENTIAL,resemblance,"describes by resemblance"
-no legs,REFERENTIAL,negated,"says what the shape lacks - that identifies it"
-No white holes in the object,REFERENTIAL,negated,"negation carrying real descriptive content"
-not a triangle top,REFERENTIAL,negated,"negated description of a part"
-no 3 points. chimney pointing down on left,REFERENTIAL,negated,"negation plus positive description"
-the pointy one not the fish,REFERENTIAL,contrastive,"picks the target by contrast with another shape"
-with stairs at the back,REFERENTIAL,follow_up,"sentence fragment continuing an earlier description"
+looks like a bird with its wings out,REFERENTIAL,resemblance,describes by resemblance
+no legs,REFERENTIAL,negated,says what the shape lacks - that identifies it
+No white holes in the object,REFERENTIAL,negated,negation carrying real descriptive content
+not a triangle top,REFERENTIAL,negated,negated description of a part
+no 3 points. chimney pointing down on left,REFERENTIAL,negated,negation plus positive description
+the pointy one not the fish,REFERENTIAL,contrastive,picks the target by contrast with another shape
+with stairs at the back,REFERENTIAL,follow_up,sentence fragment continuing an earlier description
 with an arrow pointing left on top,REFERENTIAL,follow_up,"follow-up detail, same description"
-and it has a hole in the middle too,REFERENTIAL,follow_up,"added detail after a pause"
-sorry not a triangle a parallelogram,REFERENTIAL,correction,"correcting the description is still describing"
-hi,FILLER,greeting,"greeting"
-gg good game,FILLER,social,"sign-off"
-ok,FILLER,bare_ack,"bare acknowledgement with nothing attached"
-yep,FILLER,bare_ack,"bare agreement"
-no,FILLER,bare_ack,"bare 'no' with nothing attached - contrast with 'no legs'"
-for me its top right,FILLER,screen_position,"position on the SCREEN - shapes are ordered differently per player"
-for me that was bottom left,FILLER,screen_position,"screen position, tells the partner nothing about the shape"
-alright now you're the matcher,FILLER,turn_coordination,"coordinating roles"
-did it freeze up for you too,FILLER,interface,"interface problem"
-the timer isn't working idk,FILLER,interface,"interface problem"
-seems there's a glitch on this survey,FILLER,interface,"talk about the study software"
-getting those bonuses!!!,FILLER,study_talk,"talk about pay"
-im lagging,FILLER,interface,"connection talk"
+and it has a hole in the middle too,REFERENTIAL,follow_up,added detail after a pause
+sorry not a triangle a parallelogram,REFERENTIAL,correction,correcting the description is still describing
+left*,REFERENTIAL,correction,a typo fix of an earlier description is part of that description
+hi,FILLER,greeting,greeting
+gg good game,FILLER,social,sign-off
+ok,FILLER,bare_ack,bare acknowledgement with nothing attached
+yep,FILLER,bare_ack,bare agreement
+no,FILLER,bare_ack,bare 'no' with nothing attached - contrast with 'no legs'
+click it when you see it,FILLER,interface,telling the partner to act - says nothing about the shape
+you can select it now,FILLER,interface,prompting the selection
+that took me three tries to click,FILLER,interface,interface trouble
+did it freeze up for you too,FILLER,interface,interface problem
+the timer isn't working idk,FILLER,interface,interface problem
+im lagging,FILLER,interface,connection talk
+alright now you're the matcher,FILLER,turn_coordination,coordinating roles
+it says im the matcher now,FILLER,role_talk,talk about role assignment
+as the director then,FILLER,role_talk,talk about role assignment
+getting those bonuses!!!,FILLER,study_talk,talk about pay
 no way we've accidentally missed 12,FILLER,task_talk,"about the task's progress, no shape content"
+that one was way off,FILLER,task_talk,evaluating the last round rather than describing this one
+anyway,FILLER,discourse,discourse marker with nothing attached
+cant wait to finish this one,FILLER,social,small talk
