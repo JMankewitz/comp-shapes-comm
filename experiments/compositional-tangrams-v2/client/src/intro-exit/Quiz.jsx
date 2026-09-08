@@ -56,6 +56,22 @@ export function Quiz({ next }) {
         ],
         correctAnswer: "False",
       },
+        // Not a mechanics question. The quiz is the only screen a participant
+        // CANNOT skip, so it is the one place this fact is guaranteed to land.
+        // In the pilot, 24 of 25 partial sessions ended because one person left
+        // and took their partner's completed work with them -- the answer below
+        // is literally what happens (Empirica ends the game for both, and
+        // neither can be re-paired). Stated in Introduction.jsx so it is
+        // answerable rather than a trick.
+        {
+          question: "If you stop partway through the game, what happens to your partner?",
+          choices: [
+            "(A) They are automatically matched with someone else",
+            "(B) Their session ends too, and the work they have done is lost",
+            "(C) Nothing - they finish the study on their own",
+          ],
+          correctAnswer: "(B) Their session ends too, and the work they have done is lost",
+        },
   ];
 
   const handleChoiceChange = (questionIndex, event) => {

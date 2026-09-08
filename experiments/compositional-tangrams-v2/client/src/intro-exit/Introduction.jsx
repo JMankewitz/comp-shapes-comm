@@ -32,6 +32,25 @@ export function Introduction({ next }) {
     partner. In <b>Part 3</b> you will describe a set of shapes on your own
     again, the same way you did in Part 1.
       </p>
+        <br></br>
+        {/* Stated here so the quiz question about it has a source to point back
+            to. It is also the single fact most worth landing: in the pilot, 24
+            of 25 partial sessions ended because ONE person left, taking their
+            partner's completed work with them. */}
+        <p>
+      <b>You will be playing with a real person, live.</b> Your partner is another
+      participant who is online at the same time as you, waiting on you just as
+      you wait on them. The game cannot continue without both of you.
+        </p>
+        <br></br>
+        <p>
+      This means that <b>if you stop partway through, the session ends for your
+      partner too</b>, and the work they have already done is lost. Neither of you
+      can be matched with someone else afterwards. Please only continue if you
+      can give this your full attention for about 45 minutes. If you cannot,
+      please return the study on Prolific now &mdash; there is no penalty, and it
+      frees the slot for someone else.
+        </p>
       <br></br>
       <p>
     In Parts 1 and 3 there is no partner and no score &mdash; just type how you
