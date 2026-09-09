@@ -98,7 +98,12 @@ def processed_dir(study, folder):
 # means a folder processed by an older version of the script -- which stopped
 # before this file existed -- is correctly seen as needing another pass. Gating
 # on games.csv instead would call those folders done and silently skip them.
-DONE_MARKER = "payments.csv"
+#
+# It moved into private/ when identifier-bearing outputs were quarantined there
+# (2026-09). That has a useful side effect: a processed tree with private/
+# deleted -- the form you would hand to a collaborator -- reads as unprocessed,
+# which is true, because regenerating it is exactly what you would have to do.
+DONE_MARKER = os.path.join("private", "returns.csv")
 
 
 def needs_preprocess(study, folder):
@@ -263,7 +268,9 @@ def main():
 
     print("\nNext:")
     print("  payments: the paste-ready lists are printed above by preprocessing,")
-    print("            and the full table is payments.csv in each processed folder")
+    print("            and the full table is private/payments.csv in each")
+    print("            processed folder (private/ is gitignored -- it has")
+    print("            Prolific IDs in it)")
     print("  python3 scripts/plan_next_wave.py --n-sets 75  # coverage across ALL runs")
 
 

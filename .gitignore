@@ -1,51 +1,40 @@
-## ignoring by default
+# ---------------------------------------------------------------------------
+# OS, editors, session state
+# ---------------------------------------------------------------------------
 .DS_Store
-.ipynb_checkpoints/
+.idea/
+.Rhistory
+.RData
+.RDataTmp
+.Rproj.user/
 
-*.ai
-*.aux
-*.bbl
-*.blg
-*.fdb_latexmk
-*.fls
-*.lof
-*.log
-*.lot
-*.out
-*.toc
-*.synctex.gz
-*.key
-*.h5
-*.npy
-auth.json
-auth.txt
-node_modules/
-features/
-.Rproj.user
-
-# Byte-compiled / optimized / DLL files
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
+.ipynb_checkpoints/
+.python-version
+.mypy_cache/
+.pytest_cache/
+.cache
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.hypothesis/
+.tox/
 
-*.lof
-*.lot
-*.out
-.DS_Store
-.Rhistory
-*.fdb_latexmk
-*.bbl
-*.aux
-*.blg
-*.fls
-*.log
-*.synctex.gz
-*.pdf
-
-
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # Distribution / packaging
 .Python
@@ -65,110 +54,141 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-
-# Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
+# ---------------------------------------------------------------------------
+# Node / JS (Empirica client + server)
+# ---------------------------------------------------------------------------
+node_modules/
 
-# Translations
+# ---------------------------------------------------------------------------
+# LaTeX build products
+# ---------------------------------------------------------------------------
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.toc
+*.synctex.gz
 *.mo
 *.pot
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
+# PDFs are LaTeX output almost everywhere in this repo -- EXCEPT the figures,
+# which are the vector versions that go into the manuscript. The old blanket
+# rule was silently excluding analysis/figures/*.pdf while their .png twins were
+# tracked, so the paper-ready copies existed only on one laptop.
+*.pdf
+!analysis/figures/**/*.pdf
 
-# Flask stuff:
-instance/
-.webassets-cache
+# ---------------------------------------------------------------------------
+# Secrets and participant payment data
+#
+# The bonus CSVs are Prolific IDs paired with payment amounts, written by
+# scripts/mark_paid.py and scripts/split_payments.py. Participant identifiers
+# do not belong in a public repo, and these regenerate from the exports.
+# ---------------------------------------------------------------------------
+auth.json
+auth.txt
+*.key
+data/paid.log
+/bonuses*.csv
+/lobby_bonuses.csv
 
-# Scrapy stuff:
-.scrapy
+# ---------------------------------------------------------------------------
+# Large regenerable artefacts
+#
+# Rule of thumb: if a script writes it and re-running that script rebuilds it
+# byte-for-byte, it does not go in git. The *inputs* (processed CSVs, configs,
+# code) are tracked, so anything below can be rebuilt from a fresh clone.
+# ---------------------------------------------------------------------------
 
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# celery beat schedule file
-celerybeat-schedule
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-
-# Working notes, specs and drafts -- local scratch for planning/implementation,
-# not project documentation. Deliberately untracked.
-documents/
-
-# Empirica bundles are build artifacts (empirica bundle regenerates them).
-# Keeps ~256MB blobs out of history. Does not affect the already-tracked
-# compShapesV1.tar.zst -- see notes if you want that untracked too.
-*.tar.zst
-
-# Regenerable stimulus-pipeline intermediates (368MB and growing)
+# Stimulus pipeline. 4.8 GB of rendered tangrams and embeddings, rebuilt by
+# stimuli/generate_tangrams/02_embed_shards.py + 03_merge_shards.py.
+stimuli/generate_tangrams/data/
 stimuli/generate_tangrams/outputs/checkpoints/
+stimuli/generate_tangrams/outputs/contact_sheets/
 
-# Data exports: these come home via scp, never through git.
-experiments/*/compShapesV1-*.zip
-data/chat_data/chat_pairwise_similarities.csv
-data/processed_data/exp_1/message_similarities.csv
+# Per-k sweep summaries, 6-11 MB each and regenerable by 04_sample_sets.py.
+# The candidate_sets_*.json files beside them are small and ARE the chosen
+# stimulus sets, so they stay tracked -- that is experimental provenance.
+stimuli/generate_tangrams/outputs/similarity_results/set_summaries_k*.csv
 
-# R session state -- large, machine-local, regenerable
-.RData
-.RDataTmp
-.Rproj.user/
+# Superseded stimulus versions kept locally for reference (172 MB of PNGs).
+stimuli/archive/
 
-# Derived embedding artefacts. Regenerable from processed_data by
-# analysis/exp2/02_build_corpus.py + 03_embed.py; ~220 MB of float32 at full
+# Derived embedding artefacts. Rebuilt from processed_data by
+# analysis/exp2/03_build_corpus.py + 04_embed.py; ~220 MB of float32 at full
 # study size, and obsolete the moment the encoder changes. The similarity pair
 # tables under it are small but equally regenerable.
 data/embeddings/
-__pycache__/
+*.npy
+*.h5
+
+# Empirica bundles are build artefacts (`empirica bundle` regenerates them).
+# Keeps ~256 MB blobs out of history. Does not affect the already-tracked
+# compShapesV1.tar.zst.
+*.tar.zst
+
+# ---------------------------------------------------------------------------
+# Participant identifiers -- NEVER COMMITTED
+#
+# This repo is PUBLIC. Raw Empirica exports carry the Prolific ID twice, in
+# player.csv's `urlParams` (participantKey) and `participantIdentifier`, so no
+# raw export can be committed regardless of size. They live on this machine and
+# in the Empirica exports; git is not a backup for them.
+#
+# 00_preprocessing.R writes everything identifier-bearing to <run>/private/ --
+# the playerID -> prolificID map, the payment lists, the returns list. The rest
+# of the processed tree is ULIDs only and is safe to commit or post publicly.
+# ---------------------------------------------------------------------------
+data/raw_data/
+data/processed_data/**/private/
+experiments/*/compShapesV1-*.zip
+experiments/*/data/
+
+# Belt and braces for the payment files. 00_preprocessing.R and
+# split_payments.py both write these into private/ now, but earlier versions
+# put them at the top of the run folder, and a Prolific export dropped into a
+# run folder by hand is named prolific_*.csv. Matching the names as well as the
+# directory means a stale tree, or a hand-copied input, still cannot be added.
+payments.csv
+returns.csv
+bonus*.csv
+lobby*.csv
+turned_away*.csv
+player_bonuses.csv
+prolific_*.csv
+
+# Oversized derived files; come home via scp, rebuilt on demand.
+data/chat_data/chat_pairwise_similarities.csv
+data/processed_data/exp_1/message_similarities.csv
+
+# ---------------------------------------------------------------------------
+# Local scratch
+#
+# Working notes, specs and drafts -- planning material, not project
+# documentation. Deliberately untracked.
+# ---------------------------------------------------------------------------
+documents/
+features/
+/site
+target/
+.scrapy
+.webassets-cache
+.spyderproject
+.spyproject
+.ropeproject
+celerybeat-schedule
+*.sage.py
+local_settings.py
+db.sqlite3
+instance/
+*.ai

@@ -1,0 +1,14 @@
+row_id,sheet,stratum,text,round_context,first_pass,is_description
+B0323,B,negation,"no you need to type better,","M: u need read well mate pls  |  D: >>> no you need to type better, <<<  |  D: two legs with triangle on top",FALSE,FALSE
+B0351,B,negation,No worries,"D: >>> No worries <<<  |  D: boat on the bottom, flat top on the top shape",FALSE,FALSE
+B0354,B,negation,not the same number,D: great  |  D: sidewise house  |  D: with three roof peaks  |  D: please click the theimage  |  D: you have to click it  |  M: number  |  D: >>> not the same number <<<,FALSE,FALSE
+B0392,B,short,press it,"M: A black irregular shape with a tall pointed section on the left, two raised points at the top, and two long downward-pointing sections. It has a small arch-like opening in the center and jagged edges.  |  D: like a person drinking from a fountain  |  D: the fountain is two triangles  |  M: yes it looks like that  |  D: >>> press it <<<",FALSE,FALSE
+B0393,B,short,biggest shape,M: Bird?  |  D: >>> biggest shape <<<  |  D: balancing on left corner,FALSE,TRUE
+B0394,B,short,on aledge,D: house with irregular white shape in  |  D: >>> on aledge <<<  |  D: with triangle facing left,FALSE,TRUE
+B0395,B,short,L shape,D: >>> L shape <<<  |  M: I don't have L shape  |  M: got it,FALSE,TRUE
+B0396,B,short,top*,D: Diamond at tope with house shape under it and then big black thing under that  |  D: >>> top* <<<,FALSE,TRUE
+B0397,B,short,spiky above,D: >>> spiky above <<<,FALSE,TRUE
+B0398,B,short,White arrow,D: >>> White arrow <<<,FALSE,TRUE
+B0399,B,short,left side,D: two triangles on side  |  D: >>> left side <<<,FALSE,TRUE
+A0124,A,random,looks like a hat,D: diamond at the top  |  D: >>> looks like a hat <<<  |  D: stairs on the left,,TRUE
+A0146,A,random,white rectangle in the middle,D: >>> white rectangle in the middle <<<,,TRUE

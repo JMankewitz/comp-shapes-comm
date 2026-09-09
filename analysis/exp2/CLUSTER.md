@@ -334,7 +334,7 @@ Cluster policy ([wiki](https://cluster.cs.stanford.edu/sc)):
 |---|---|
 | `git clone`, `git fetch`, `rsync` | **scdt** |
 | `conda create`, `pip install` | **scdt** — package downloads are transfers |
-| Pre-downloading model weights | **scdt** — gemma-2-9b is ~18 GB |
+| Pre-downloading model weights | **scdt** — Qwen3-32B is ~66 GB |
 | `nlprun` submission | `sc` |
 | Every pipeline step | a compute node, via `nlprun` |
 
@@ -385,45 +385,59 @@ conda create -n compshapes-nlp python=3.10 -y && conda activate compshapes-nlp &
 ```
 
 **Point the HuggingFace cache at scratch before downloading anything.** The
-default is `~/.cache/huggingface`; gemma-2-9b (~18 GB) plus the embedding model
-will blow a home-directory quota:
+default is `~/.cache/huggingface`; Qwen3-32B (~66 GB) plus the embedding model
+will blow a home-directory quota several times over:
 
 ```bash
 echo 'export HF_HOME=/nlp/scr/jmank/hf_cache' >> ~/.bashrc && source ~/.bashrc && mkdir -p $HF_HOME
 ```
 
-Pre-fetch the weights here rather than inside a GPU job — downloading 18 GB while
-holding a GPU wastes the allocation, and gemma is a gated repo, so an
-unauthenticated job fails *after* it has queued and started:
+Pre-fetch the weights here rather than inside a GPU job — downloading tens of GB
+while holding a GPU wastes the allocation, and a job that discovers a missing
+model has already queued and taken a card.
+
+**Activate the env first.** `hf` is installed inside `compshapes-nlp`, not in
+`base`, and `hf: command not found` from a `(base)` prompt means exactly that
+and nothing worse:
+
+```bash
+conda activate compshapes-nlp && echo "HF_HOME=$HF_HOME"
+```
+
+An empty `HF_HOME` means `~/.bashrc` has not been sourced in this shell — export
+it before downloading, or 66 GB lands in your home quota.
 
 The CLI is `hf`. `huggingface-cli` was removed in `huggingface_hub` >= 0.34 and
-now prints a deprecation notice instead of running.
+now prints a deprecation notice instead of running. If the env predates that,
+this form works either way and honours `HF_HOME` identically:
 
 ```bash
-hf auth login
+python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3-32B')"
 ```
 
-Ungated model first: if it succeeds, the cache path and token both work, so any
-failure on gemma is specifically the licence gate rather than setup.
+Both models in `config.yaml` are **ungated** (Apache 2.0), so no `hf auth login`
+and no licence to accept:
 
 ```bash
-hf download Qwen/Qwen3-Embedding-0.6B
+hf download Qwen/Qwen3-Embedding-0.6B     # ~1.2 GB, for 04_embed.py
+hf download Qwen/Qwen3-32B                # ~66 GB, for 02_referential_filter.py
 ```
+
+Check scratch has room first — 66 GB is not nothing:
 
 ```bash
-hf download google/gemma-2-9b-it
+df -h /nlp/scr/jmank
 ```
 
-⚠️ **gemma-2-9b-it is a GATED repo.** Accept the licence once, signed in, at
-<https://huggingface.co/google/gemma-2-9b-it>. Until then every download and
-every job 401s regardless of the token — and a job discovers this *after* it has
-queued and taken a GPU. `Qwen/Qwen2.5-7B-Instruct` is ungated and comparable at
-this task if you would rather skip the gate; it is a one-line change in
-`config.yaml`, and `--self-test` will tell you in thirty seconds whether the
-substitute holds up.
+If it does not, `Qwen/Qwen3-14B` is ~28 GB and fits a single a6000; see the
+sizing table above. Swapping is one line in `config.yaml`.
 
-Both `HF_HOME` and `HF_TOKEN` must be visible to the `nlprun` jobs, which is why
-they go in `~/.bashrc` rather than being exported for one shell.
+> Earlier revisions of this file pointed at `google/gemma-2-9b-it` and walked
+> through its licence gate. Nothing in `config.yaml` uses gemma any more — that
+> section is gone rather than left to mislead.
+
+`HF_HOME` must be visible to the `nlprun` jobs, which is why it goes in
+`~/.bashrc` rather than being exported for one shell.
 
 ### Every subsequent run
 

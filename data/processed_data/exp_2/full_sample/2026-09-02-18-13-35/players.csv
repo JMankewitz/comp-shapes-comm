@@ -1,3 +1,1 @@
 playerID,gameID,bonus,score,role,rotation,completedStudy,finishedTraining,ended,pretestItemGap,posttestItemGap,pretestCardShownAt,pretestStartedAt,pretestSubmittedAt,trainingStartedAt,roundsInactive,exitStepDone,handoff_stage,pretest_advanced_at,pretest_wait_secs,handoff_secs,age,gender,strategy,enjoy,feedback,education,ai_used,ai_tool,ai_agreed
-01M0VCG9G1HPRDKK775CBP8VAV,01M0VCG4YJ3SSHK6866WMH2XYH,0.03,0.03,matcher,0,FALSE,FALSE,game ended,4,4,NA,NA,NA,NA,4,TRUE,never_reached_pretest,NA,NA,NA,,,,,,,NA,NA,FALSE
-01M0VCHMX1KP6K8WD30254ZST2,01M0VCG4YJ3SSHK6866WMH2XYH,0.03,0.03,director,0,FALSE,FALSE,game ended,4,4,NA,NA,NA,NA,5,TRUE,never_reached_pretest,NA,NA,NA,,,,,,,NA,NA,FALSE

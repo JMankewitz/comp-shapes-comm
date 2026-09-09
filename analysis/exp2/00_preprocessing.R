@@ -21,6 +21,16 @@
 #   chats.csv               one row per message
 #   descriptions.csv        pre + post free descriptions, one row per item
 #   trial_timing.csv        S6.6 instrumentation, one row per training trial
+#
+# All of the above are SHAREABLE: Empirica ULIDs only, no Prolific IDs, safe to
+# commit or post publicly. Each export writes only the games no earlier export
+# already wrote, so the tree holds each game exactly once.
+#
+# Anything carrying a Prolific ID goes to <run>/private/, which .gitignore
+# excludes:
+#   private/id_map.csv      playerID -> prolificID, the only re-identifying file
+#   private/payments.csv    who to pay and how much
+#   private/bonus.csv, lobby.csv, turned_away.csv, returns.csv
 
 library(tidyverse)
 library(here)
@@ -36,6 +46,34 @@ experiment_folder <- "exp_2"
 raw_folder <- here("data/raw_data", experiment_folder, target_experiment_name)
 processed_folder <- here("data/processed_data", experiment_folder, target_experiment_name)
 dir.create(processed_folder, recursive = TRUE, showWarnings = FALSE)
+
+# IDENTIFIERS ARE QUARANTINED HERE.
+#
+# `processed_folder` is meant to be shareable and committable: Empirica ULIDs
+# only, no Prolific IDs, no way to link a row back to a person. Everything that
+# needs a Prolific ID to do its job -- the payment lists, the returns list, and
+# the playerID -> prolificID map itself -- is written to `private/` instead,
+# which .gitignore excludes.
+#
+# The rule: if you would not put a file in a public OSF repo, it goes in here.
+private_folder <- file.path(processed_folder, "private")
+dir.create(private_folder, recursive = TRUE, showWarnings = FALSE)
+
+# Remove the pre-quarantine copies. Before September 2026 these files were
+# written at the top level of the run folder, and simply writing the new ones
+# into private/ leaves the old ones sitting there -- still carrying Prolific
+# IDs, still tracked by git, and superseded by a file one directory down. That
+# is a trap for anyone who re-runs an old tree, so clear it here rather than
+# relying on a one-off cleanup that only this machine ever ran.
+legacy <- file.path(processed_folder,
+                    c("payments.csv", "returns.csv", "bonus.csv",
+                      "lobby.csv", "turned_away.csv", "player_bonuses.csv"))
+legacy <- legacy[file.exists(legacy)]
+if (length(legacy)) {
+  file.remove(legacy)
+  message("removed ", length(legacy), " pre-quarantine file(s) from ",
+          basename(processed_folder), " -- they now live in private/")
+}
 
 d_game_raw   <- read_csv(here(raw_folder, "game.csv"), show_col_types = FALSE)
 d_player_raw <- read_csv(here(raw_folder, "player.csv"), show_col_types = FALSE)
@@ -346,13 +384,78 @@ d_trial_timing <- d_round |>
   left_join(d_stage_sel, by = "roundID") |>
   left_join(d_rendered, by = "roundID", relationship = "many-to-many")
 
-# ---- write ----------------------------------------------------------------
+# ---- deduplicate against earlier exports ------------------------------------
+#
+# Empirica exports are CUMULATIVE: the 2026-08-28 export contains every game the
+# 2026-08-25 one did. Writing each export's full contents means the processed
+# tree carries the same game several times -- pooling exp_2 naively gives 2,812
+# chat rows for 1,932 real messages, a 45% inflation that every downstream
+# script then has to remember to undo.
+#
+# FIRST EXPORT WINS, and that is safe rather than merely convenient: checked
+# across all 13 exports, 87 games appear more than once and every duplicate copy
+# is IDENTICAL (same round counts). Exports are only taken after a game has
+# finished, so an earlier copy is never a partial one. If that ever stops being
+# true -- if you export mid-game -- this rule silently keeps the truncated copy,
+# so the check below will start reporting differing row counts.
+#
+# Run folder names are timestamps, so sorting them is chronological order.
+#
+# Dedup is WITHIN a study (pilot_v1, full_sample), not across them, because each
+# study is a separate Prolific launch against a fresh datastore. Verified: 0
+# games are shared between pilot_v1 (40) and full_sample (125). If a future
+# study ever reuses a datastore, this scope would have to widen.
+wave_folder <- dirname(processed_folder)
+earlier <- list.dirs(wave_folder, recursive = FALSE, full.names = TRUE)
+earlier <- sort(earlier[basename(earlier) < basename(processed_folder)])
+
+read_ids <- function(dirs, file, col) {
+  paths <- file.path(dirs, file)
+  paths <- paths[file.exists(paths)]
+  if (!length(paths)) return(character(0))
+  map(paths, ~ read_csv(.x, show_col_types = FALSE, progress = FALSE)[[col]]) |>
+    unlist() |> as.character() |> unique()
+}
+seen_games   <- read_ids(earlier, "games.csv", "gameID")
+seen_players <- read_ids(earlier, "players.csv", "playerID")
+
+n_dup <- sum(d_game$gameID %in% seen_games)
+if (length(earlier)) {
+  message("\ndedup: ", length(earlier), " earlier export(s); ",
+          n_dup, " of ", nrow(d_game), " games already written, ",
+          nrow(d_game) - n_dup, " new")
+}
+
+# Games first, then everything keyed to a game. Players dedupe on playerID
+# rather than gameID so that lobby timeouts -- who never get a gameID -- are
+# still written exactly once instead of being dropped by a gameID filter.
+keep_games <- setdiff(d_game$gameID, seen_games)
+by_game <- function(df) filter(df, gameID %in% keep_games)
+
+d_game         <- by_game(d_game)
+d_round        <- by_game(d_round)
+d_chat         <- by_game(d_chat)
+d_descriptions <- by_game(d_descriptions)
+d_trial_timing <- by_game(d_trial_timing)
+d_players_out  <- filter(d_players, !playerID %in% seen_players)
+
+# ---- write ------------------------------------------------------------------
+# SHAREABLE: Empirica ULIDs only. Nothing here links a row to a person.
 write_csv(d_game,          file.path(processed_folder, "games.csv"))
-write_csv(d_players,       file.path(processed_folder, "players.csv"))
 write_csv(d_round,         file.path(processed_folder, "rounds.csv"))
 write_csv(d_chat,          file.path(processed_folder, "chats.csv"))
 write_csv(d_descriptions,  file.path(processed_folder, "descriptions.csv"))
 write_csv(d_trial_timing,  file.path(processed_folder, "trial_timing.csv"))
+
+# players.csv keeps the exit survey (age, gender, strategy, feedback) but NOT
+# the Prolific ID -- those fields are only identifying in combination with it.
+write_csv(select(d_players_out, -any_of(c("prolificID", "id_source"))),
+          file.path(processed_folder, "players.csv"))
+
+# PRIVATE: the link table. This is the only file that can turn a ULID back into
+# a person, which is exactly why it lives outside the committable tree.
+write_csv(select(d_players_out, any_of(c("playerID", "gameID", "prolificID", "id_source"))),
+          file.path(private_folder, "id_map.csv"))
 
 # ---- sanity checks ---------------------------------------------------------
 # These encode the design's invariants. If one fails, something upstream changed.
@@ -609,7 +712,7 @@ d_payments <- d_players |>
          category, already_paid, contextStructure, gameID) |>
   arrange(group, desc(minutes))
 
-write_csv(d_payments, file.path(processed_folder, "payments.csv"))
+write_csv(d_payments, file.path(private_folder, "payments.csv"))
 
 # Two paste-ready files: exactly the rows to pay and exactly two columns, with
 # NO header, so the whole file can be selected and dropped into Prolific's bulk
@@ -655,10 +758,10 @@ d_returns <- d_payments |>
   filter(is_real_participant(prolificID)) |>
   transmute(prolificID = str_split_i(prolificID, "@", 1), minutes)
 
-write_csv(d_bonus, file.path(processed_folder, "bonus.csv"), col_names = FALSE)
-write_csv(d_lobby, file.path(processed_folder, "lobby.csv"), col_names = FALSE)
-write_csv(d_nolobby, file.path(processed_folder, "turned_away.csv"), col_names = FALSE)
-write_csv(d_returns, file.path(processed_folder, "returns.csv"))
+write_csv(d_bonus, file.path(private_folder, "bonus.csv"), col_names = FALSE)
+write_csv(d_lobby, file.path(private_folder, "lobby.csv"), col_names = FALSE)
+write_csv(d_nolobby, file.path(private_folder, "turned_away.csv"), col_names = FALSE)
+write_csv(d_returns, file.path(private_folder, "returns.csv"))
 
 message("\npayments: ", nrow(d_payments), " people")
 d_payments |>
