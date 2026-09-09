@@ -112,9 +112,25 @@ data/paid.log
 
 # Stimulus pipeline. 4.8 GB of rendered tangrams and embeddings, rebuilt by
 # stimuli/generate_tangrams/02_embed_shards.py + 03_merge_shards.py.
-stimuli/generate_tangrams/data/
+stimuli/generate_tangrams/data/*
 stimuli/generate_tangrams/outputs/checkpoints/
 stimuli/generate_tangrams/outputs/contact_sheets/
+
+# EXCEPT the frozen refactor baseline, which is NOT regenerable.
+#
+# 00b_baseline_ref.py materialises src/*.py from git HEAD to produce this file.
+# HEAD now contains the REFACTORED code (fa6696a1), so re-running it would
+# freeze the refactor as its own reference and 01_validate_refactor.py would
+# compare the refactor against itself and pass. This 453 KB tensor, frozen on
+# 2026-08-17 from 3da1790e, is the only surviving pre-refactor ground truth --
+# losing it means losing the ability to prove the pipeline still reproduces the
+# published stimuli bit-exactly.
+!stimuli/generate_tangrams/data/embeddings/
+stimuli/generate_tangrams/data/embeddings/*
+!stimuli/generate_tangrams/data/embeddings/_baseline_ref.pt
+
+# Scratch checkout of src/ at a git commit, rebuilt by 00b_baseline_ref.py.
+stimuli/generate_tangrams/.pristine_src/
 
 # Per-k sweep summaries, 6-11 MB each and regenerable by 04_sample_sets.py.
 # The candidate_sets_*.json files beside them are small and ARE the chosen
