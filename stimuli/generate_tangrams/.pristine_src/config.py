@@ -12,18 +12,11 @@ RAW_TANGRAMS_SVGS = DATA_DIR / "raw_tangrams" / "raw_svgs"
 PROCESSED_TANGRAMS_SVGS = DATA_DIR / "raw_tangrams" / "fixed_svgs"
 PROCESSED_PNGS = DATA_DIR / "processed_tangrams" / "processed_pngs"
 PROCESSED_TANGRAMS_WHITE = DATA_DIR / "processed_tangrams" / "compositional-white"
-# was "compositional-trans", which has never existed on disk
-PROCESSED_TANGRAMS_TRANS = DATA_DIR / "processed_tangrams" / "compositional-transparent"
-# Output dir for the shipped subset (write_tangram_lists.py copies into it).
-# It has simply never been created; the name itself was fine.
+PROCESSED_TANGRAMS_TRANS = DATA_DIR / "processed_tangrams" / "compositional-trans"
 PROCESSED_TANGRAMS_FINAL = DATA_DIR / "processed_tangrams" / "compositional-final"
 
 MAPPING_FILE = DATA_DIR / "tangram_map.csv"
 EMBEDDINGS_DIR = DATA_DIR / "embeddings"
-EMBEDDING_SHARDS = EMBEDDINGS_DIR / "shards"
-
-# The 470 component tangrams, and hence the 470x470 = 220,900 composed shapes.
-N_TANGRAMS = 470
 
 # output paths
 

@@ -1,5 +1,4 @@
-from embedding import (setup_model, get_image_embedding, setup_pretrained_model,
-                       embed_paths)
+from embedding import setup_model, get_image_embedding, setup_pretrained_model
 from typing import Optional
 import torch
 import matplotlib.pyplot as plt
@@ -20,23 +19,21 @@ class ImageSet:
         self.similarity_matrix = None
         self.set_type = set_type
     
-    def extract_embeddings(self, model, preprocess, device, batch_size=256,
-                           num_workers=0):
-        self.embeddings = embed_paths(
-            self.image_paths, model, device,
-            batch_size=batch_size, num_workers=num_workers,
-        )
-
+    def extract_embeddings(self, model, preprocess, device):
+        embeddings = []
+        for path in self.image_paths:
+            image_embeddings = get_image_embedding(path, model, preprocess, device)
+            embeddings.append(image_embeddings)
+        self.embeddings = torch.cat(embeddings)
+    
     def compute_cosine_similarities(self):
-        if self.embeddings is None:
+        if self.embeddings == None:
             raise ValueError("Need to extract embeddings first!")
 
+        #embeddings = self.embeddings.mean(dim=1)
         embeddings = self.embeddings
-        # FTCLIP.forward already L2-normalizes (see FTCLIP.compute_norm), so the
-        # matmul below IS cosine similarity -- verified empirically, the diagonal
-        # is 1.0 to within 1.8e-07. The normalization line that used to sit here
-        # commented out was redundant, not missing: Exp 1's published values are
-        # true cosines and its thresholds need no re-derivation.
+        #normalized = embeddings / embeddings.norm(dim=1, keepdim=True)
+        # matmul(A, B.t()) is the full pairwise sim
         self.similarity_matrix = torch.matmul(embeddings, embeddings.T)
 
     def get_pair_similarity(self, idx1, idx2):

@@ -1,0 +1,45 @@
+# Embedding run configuration.
+#
+# Paths left null fall back to src/config.py, which resolves them relative to
+# the repo. Set them explicitly to point at cluster scratch, e.g.
+#   image_dir: /nlp/scr/jmank/comp_shapes/compositional-white
+#   shard_dir: /nlp/scr/jmank/comp_shapes/embeddings/shards
+
+run_name: "ftclip-kilogram-whole-black"
+
+# Model. Do not substitute: comparability with the published Exp 1 numbers
+# depends on these exact weights (validated bit-exact in 00_/01_).
+repo_id: "lil-lab/kilogram-models"
+model_files:
+  - "clip_controlled/whole+black/model0.pth"
+  - "clip_controlled/whole+black/model1.pth"
+  - "clip_controlled/whole+black/model2.pth"
+
+image_dir: null
+shard_dir: null
+
+# "auto" prefers cuda > mps > cpu. Use "cpu" to reproduce Exp 1's exact device.
+device: "auto"
+
+# eval_mode is safe: 01_validate_refactor.py showed cpu/eval/bs=1 reproduces the
+# pristine train-mode embeddings bit-identically (0.00e+00). CLIP ViT-B/32 has no
+# dropout and only LayerNorm, so eval changes no ops.
+eval_mode: true
+
+batch_size: 256
+
+# PNG decode, not the forward pass, is the bottleneck at 256x256.
+#
+# 0 on macOS. Benchmarked: 118 img/s with 0 workers, 7 img/s with 8, because
+# macOS multiprocessing SPAWNS (each worker relaunches Python and re-imports
+# torch + clip) rather than forking.
+#
+# On the Linux cluster, set this to 8-16: fork makes workers nearly free there
+# and decode genuinely parallelizes.
+num_workers: 0
+
+# Queue depth is num_workers * prefetch_factor * batch_size images, each a
+# ~600 KB float32 tensor. Keep the product in mind before raising either.
+prefetch_factor: 2
+
+n_tangrams: 470
