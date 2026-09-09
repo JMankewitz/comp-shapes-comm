@@ -239,10 +239,21 @@ it, never hand-edit it:
 python3 scripts/flag_timeout_games.py --write
 ```
 
+Also regenerate the stimulus screen. `04_sample_sets.py` scores composed images
+against each other and never compares one component to another, so two
+near-duplicate tangrams could be drawn into the same set — and when one is the
+top and the other the bottom of the same displayed image, that image is a shape
+stacked on itself (`373_282.png`, set 4 J10). Only needed after the set file
+changes, but it is cheap and idempotent:
+
+```bash
+python3 scripts/flag_component_clashes.py --write
+```
+
 **4b. [L]** Plan the next wave (review, then `--write`):
 
 ```bash
-python3 scripts/plan_next_wave.py --n-sets 75 --exclude-games data/processed_data/exp_2/excluded_games.csv data/processed_data/exp_2/timeout_games.csv --include-games data/processed_data/exp_2/included_games.csv
+python3 scripts/plan_next_wave.py --n-sets 75 --exclude-games data/processed_data/exp_2/excluded_games.csv data/processed_data/exp_2/timeout_games.csv --include-games data/processed_data/exp_2/included_games.csv --skip-sets data/processed_data/exp_2/clashing_sets.csv
 ```
 
 Always pass all three lists. Coverage counts dyads where both players have
@@ -257,6 +268,12 @@ Always pass all three lists. Coverage counts dyads where both players have
   that played all 48 rounds and submitted a full posttest still reads as
   incomplete if one player closed the tab before that last click. The data is
   there; without this the slot is recruited a second time for nothing.
+- `--skip-sets` — sets containing an image whose two halves are near-duplicate
+  tangrams. These are stepped OVER rather than counted, so `--n-sets 75` still
+  means 75 usable sets; the pool just runs further down the ranked list (0–94 at
+  present). Sets 2, 4, 9, 10, 11 and 12 already hold partial data and will now
+  never be finished — that data stays in the corpus, but those dyads cannot
+  contribute to the between-dyad comparison.
 
 Add rows to the hand-curated CSVs as each wave's quality screens run, not at the
 end.
@@ -269,7 +286,7 @@ schedule is derived from coverage, so dropping them here writes a different
 schedule than the one you just reviewed:
 
 ```bash
-python3 scripts/plan_next_wave.py --n-sets 75 --exclude-games data/processed_data/exp_2/excluded_games.csv data/processed_data/exp_2/timeout_games.csv --include-games data/processed_data/exp_2/included_games.csv --write
+python3 scripts/plan_next_wave.py --n-sets 75 --exclude-games data/processed_data/exp_2/excluded_games.csv data/processed_data/exp_2/timeout_games.csv --include-games data/processed_data/exp_2/included_games.csv --skip-sets data/processed_data/exp_2/clashing_sets.csv --write
 ```
 
 `--write` now emits a `targets` map (remaining dyads per condition per set, `0`
