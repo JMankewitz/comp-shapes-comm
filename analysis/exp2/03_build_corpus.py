@@ -133,13 +133,22 @@ def build(cfg, runs=None):
     print(f"  {len(games)} games, {len(rounds)} training rounds, "
           f"{len(chats)} messages, {len(descs)} descriptions")
 
-    excl_path = os.path.join(REPO, cfg["paths"]["excluded_games"])
+    # One path or several: the hand-adjudicated list and the derived timeout list
+    # are kept in separate files (see config.yaml) and unioned here.
+    excl_cfg = cfg["paths"]["excluded_games"]
+    excl_paths = [excl_cfg] if isinstance(excl_cfg, str) else list(excl_cfg)
     excluded = set()
-    if os.path.exists(excl_path):
-        ex = pd.read_csv(excl_path, dtype=str)
-        excluded = set(ex["gameID"].str.strip()) if "gameID" in ex else set()
-        print(f"  {len(excluded)} game(s) flagged in excluded_games.csv "
-              f"(flagged, NOT dropped -- 05_similarity.py filters)")
+    for rel in excl_paths:
+        p = os.path.join(REPO, rel)
+        if not os.path.exists(p):
+            print(f"  note: {rel} not present -- skipping")
+            continue
+        ex = pd.read_csv(p, dtype=str)
+        found = set(ex["gameID"].str.strip()) if "gameID" in ex else set()
+        excluded |= found
+        print(f"  {len(found)} game(s) flagged in {os.path.basename(rel)}")
+    print(f"  {len(excluded)} game(s) excluded in total "
+          f"(flagged, NOT dropped -- 05_similarity.py filters)")
 
     game_cols = [c for c in ["gameID", "contextStructure", "setId", "setReplicate",
                              "compSetId", "rotation"] if c in games.columns]
@@ -233,6 +242,25 @@ def build(cfg, runs=None):
                 corpus = corpus.drop(columns=[gcol])
 
     corpus["excluded_game"] = corpus["gameID"].isin(excluded)
+
+    # Item-level screens, as flags. Training rounds have neither a per-item clock
+    # nor a paste block, so both are False/0 there by construction -- which is
+    # what makes it safe for 05_similarity.py to apply one mask to the whole
+    # corpus rather than special-casing by `source`.
+    if "autoSubmitted" in corpus.columns:
+        corpus["auto_submitted"] = (corpus["autoSubmitted"].astype(str)
+                                    .str.upper().isin(["TRUE", "T", "1"]))
+    else:
+        corpus["auto_submitted"] = False
+    if "pasteAttempts" in corpus.columns:
+        corpus["paste_attempts"] = pd.to_numeric(
+            corpus["pasteAttempts"], errors="coerce").fillna(0).astype(int)
+    else:
+        corpus["paste_attempts"] = 0
+    n_auto = int(corpus["auto_submitted"].sum())
+    n_paste = int((corpus["paste_attempts"] > 0).sum())
+    print(f"  {n_auto:,} unit(s) auto-submitted at the per-item cap, "
+          f"{n_paste:,} with a blocked paste attempt")
     corpus["text_clean"] = corpus["text"].map(clean_lexical)
     corpus["text_sha1"] = corpus["text"].map(sha1)
     corpus["n_chars"] = corpus["text"].str.len()

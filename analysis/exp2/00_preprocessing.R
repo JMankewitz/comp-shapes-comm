@@ -156,7 +156,10 @@ d_players <- d_player_raw |>
          pretestItemGap, posttestItemGap,
          pretestCardShownAt, pretestStartedAt, pretestSubmittedAt,
          trainingStartedAt,
-         any_of(c("roundsInactive", "exitStepDone"))) |>
+         # chatPasteAttempts: paste into the CHAT box is counted but not blocked
+         # (Game.jsx explains why). any_of() -- absent from waves exported before
+         # it shipped.
+         any_of(c("roundsInactive", "exitStepDone", "chatPasteAttempts"))) |>
   left_join(d_prolific, by = "playerID") |>
   # Where a player stopped, as a single categorical rather than four timestamps
   # to eyeball. `entered_training` is the normal case; everything before it is a
@@ -321,7 +324,10 @@ d_descriptions <- if (length(d_desc_parts) == 0) EMPTY_DESCRIPTIONS else {
               by = "gameID") |>
     select(playerID, gameID, contextStructure, setId, setReplicate, phase,
            order, image, label, cell, top, bottom, text,
-           shownAt, submittedAt, rt_sec, any_of("autoSubmitted"))
+           shownAt, submittedAt, rt_sec, any_of("autoSubmitted"),
+           # any_of(): waves exported before the paste block shipped have no
+           # such field, and their absence is not an error.
+           any_of("pasteAttempts"))
 }
 
 # ---- trial timing (S6.6 instrumentation) ----------------------------------
@@ -374,6 +380,27 @@ d_descriptions |> filter(phase == "pretest") |>
 if ("autoSubmitted" %in% names(d_descriptions)) {
   message("\nautoSubmitted rate (high => secondsPerItem too tight): ",
           round(100 * mean(d_descriptions$autoSubmitted, na.rm = TRUE), 1), "%")
+  # The game-level screen: >75% auto-submitted means they were routinely not at
+  # the keyboard while the clock ran. scripts/flag_timeout_games.py applies this
+  # for real; this line is here so a bad wave is visible at preprocessing time
+  # rather than three steps later.
+  d_descriptions |>
+    group_by(gameID, playerID) |>
+    summarise(auto = mean(autoSubmitted, na.rm = TRUE), n = n(), .groups = "drop") |>
+    filter(auto > 0.75, n >= 8) |>
+    (\(x) if (nrow(x) == 0) message("  OK - no player over the 75% screen")
+          else { message("  ", nrow(x), " player(s) over 75% -- see flag_timeout_games.py"); print(x) })()
+}
+
+if ("pasteAttempts" %in% names(d_descriptions)) {
+  n_paste <- sum(d_descriptions$pasteAttempts > 0, na.rm = TRUE)
+  message("\ndescription items with a BLOCKED paste attempt: ", n_paste,
+          " (of ", nrow(d_descriptions), ")")
+  if (n_paste > 0) {
+    d_descriptions |> filter(pasteAttempts > 0) |>
+      count(gameID, playerID, name = "items_with_paste") |>
+      arrange(desc(items_with_paste)) |> print()
+  }
 }
 
 # ---- payments -------------------------------------------------------------

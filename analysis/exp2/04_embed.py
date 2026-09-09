@@ -26,7 +26,7 @@ Usage (laptop, CPU, small corpus):
     python 04_embed.py --device cpu
 
 Usage (cluster, one GPU):
-    nlprun -q jag -g 1 -r 40G -c 4 -p low -a compshapes-nlp \\
+    nlprun -q jag -g 1 -r 40G -c 4 -p normal -a compshapes-nlp \\
         'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/04_embed.py'
 
 Usage (cluster, split across jobs):

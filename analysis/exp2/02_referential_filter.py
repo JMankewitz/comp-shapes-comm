@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
-"""Flag each Exp 2 DIRECTOR message as REFERENTIAL (describes the target shape)
-or FILLER (everything else). Writes `referential_flags.parquet`, which
-03_build_corpus.py joins on (roundID, playerID, text).
+"""SCREEN Exp 2 director messages for ones that do not describe the target shape,
+and nominate them for human review.
+
+THE MODEL DOES NOT DECIDE ANYTHING. It writes `referential_scores.parquet` and a
+`review_queue.csv`; a person rules on every nominated message; `02c_apply_review.py`
+turns those rulings into `referential_flags.parquet`, which is the only file
+03_build_corpus.py reads. Until someone has signed off, that file does not exist
+and 03 keeps every message. No code path here deletes a description unreviewed.
+
+That inverts what to optimise. A false positive costs five seconds of reading; a
+false negative is never seen again. So tune for RECALL at a tolerable review
+burden, set `referential.review_threshold` LOW, and read the burden table that
+--validate prints.
 
 WHAT IT IS MEASURED AGAINST
 ---------------------------
@@ -28,19 +38,21 @@ It is NOT greetings (the rule has those), NOT negation (`no boat`, `no white
 gaps` are descriptions), and NOT short messages (`bat`, `Boxing glove`, `the
 claw` are the conventionalised labels this study exists to measure).
 
-THE ASYMMETRY THAT GOVERNS EVERY CHOICE HERE
---------------------------------------------
-At a 3% base rate, keeping a stray "ok" adds 3% noise; dropping a real
-description destroys the measurement. An earlier Qwen2.5-7B run flagged 36-49%
-of messages -- it would have deleted 600-1,700 real descriptions to remove ~100
-fillers. When uncertain, KEEP. Watch recall on the filler class and the
-by-length error table, not F1.
+WHY THE SCREEN-THEN-REVIEW SHAPE IS RIGHT HERE
+----------------------------------------------
+Filler is sparse -- ~3% of director messages, ~260 of them at the planned 180
+games. That is few enough for a person to adjudicate but far too many to find by
+reading 8,600 messages. So the model reads all 8,600 and hands back a few
+hundred; the researcher rules on those. An earlier Qwen2.5-7B run flagged 36-49%
+of messages, which as an autonomous classifier would have deleted 600-1,700 real
+descriptions -- as a screen it would merely have been unusable, which is the
+failure mode you want.
 
 Usage:
-    python 02_referential_filter.py --validate     # score against dev_labels
+    python 02_referential_filter.py --validate     # burden vs recall on dev_labels
     python 02_referential_filter.py --self-test    # 11 boundary cases, no data
     python 02_referential_filter.py --debug-tokens # what the model wants to say
-    python 02_referential_filter.py                # label Exp 2
+    python 02_referential_filter.py                # screen Exp 2 -> review_queue.csv
 """
 
 import argparse
@@ -216,6 +228,45 @@ def build_contexts(chats):
 # Scoring
 # ---------------------------------------------------------------------------
 
+def check_vram(model_id, vram_gb, n_gpu):
+    """Refuse to run if the weights do not fit on the visible GPUs.
+
+    THIS IS NOT A NICETY. `device_map="auto"` does not raise when a model is too
+    big -- it fills the GPUs, then silently spills the rest to CPU RAM, and the
+    job runs orders of magnitude slower while looking like it is working. A
+    Qwen3-32B self-test on 2 x RTX A5000 (48 GB against ~66 GB of weights) spent
+    six minutes loading and would have taken hours to score eleven prompts.
+
+    The size estimate is deliberately crude -- parameter count parsed out of the
+    model name, 2 bytes each for bf16, +15% for activations and the KV cache.
+    Qwen names are regular ("Qwen3-32B", "Qwen3-14B"), and a rough number that
+    fires early beats an exact one that arrives after the weights have loaded.
+    """
+    m = re.search(r"[-/](\d+(?:\.\d+)?)B", model_id)
+    if not m:
+        print("  (could not read a parameter count from the model name -- "
+              "skipping the VRAM check)")
+        return
+    params = float(m.group(1))
+    need = params * 2 * 1.15
+    print(f"  {params:g}B params in bf16 needs ~{need:.0f} GB; {vram_gb:.0f} GB visible")
+    if need <= vram_gb:
+        return
+    per_card = vram_gb / max(1, n_gpu)
+    cards = math.ceil(need / per_card)
+    smaller = [x for x in (32, 14, 8, 4) if x * 2 * 1.15 <= vram_gb]
+    fit = f"Qwen/Qwen3-{smaller[0]}B" if smaller else "a smaller model"
+    sys.exit(
+        f"\n  STOP: {model_id} needs ~{need:.0f} GB and only {vram_gb:.0f} GB is visible.\n\n"
+        f"  device_map=\"auto\" does NOT error here -- it offloads the remainder to\n"
+        f"  CPU RAM and runs for hours while looking like it is working.\n\n"
+        f"  Two ways forward:\n"
+        f"    1. more cards: -g {cards} at {per_card:.0f} GB each (or request larger ones)\n"
+        f"    2. smaller model: set referential.model in config.yaml to {fit}\n\n"
+        f"  For a binary judgement scored off two logits, (2) is worth trying first --\n"
+        f"  --validate answers whether it is enough in a single job.\n")
+
+
 def score(prompts, cfg, batch_size=16):
     """P(FILLER) for each prompt. One forward pass, two logits compared.
 
@@ -244,7 +295,11 @@ def score(prompts, cfg, batch_size=16):
     if torch.cuda.is_available():
         major, _ = torch.cuda.get_device_capability()
         dtype = torch.bfloat16 if major >= 8 else torch.float16
-        print(f"  GPU: {torch.cuda.get_device_name(0)} -> {dtype}")
+        n_gpu = torch.cuda.device_count()
+        vram = sum(torch.cuda.get_device_properties(i).total_memory
+                   for i in range(n_gpu)) / 1e9
+        print(f"  {n_gpu} x {torch.cuda.get_device_name(0)} = {vram:.0f} GB -> {dtype}")
+        check_vram(model_id, vram, n_gpu)
     else:
         print("  no CUDA -> float32 on CPU (slow)")
     try:
@@ -349,18 +404,24 @@ def classify(targets, context_df, cfg, use_llm=True, batch_size=16):
     elif len(need):
         print(f"  {len(need):,} undecided -> REFERENTIAL (--no-llm)")
 
-    thr = float(cfg["referential"].get("threshold", 0.5))
-    df["chit_chat"] = df["p_filler"] > thr
+    # NOMINATION threshold, not a decision threshold. Every flagged message is
+    # read by a person, so a false positive costs five seconds and a false
+    # negative is the only silent error. Set it LOW -- lower than you would for
+    # an autonomous classifier -- and let --validate's burden table tell you how
+    # low. Rule hits are flagged too: they are ~3% of the corpus and including
+    # them makes the audit trail complete rather than partly automatic.
+    thr = float(cfg["referential"].get("review_threshold", 0.2))
+    df["flagged"] = df["_rule"] | (df["p_filler"] > thr)
     df["method"] = np.where(df["_rule"], "rule", "llm")
     p = df.loc[~df["_rule"], "p_filler"]
     if len(p):
-        print(f"  model P(filler): mean {p.mean():.3f}; {int((p > thr).sum()):,} over "
-              f"{thr}; {int(((p > .2) & (p < .8)).sum()):,} in the uncertain band")
-        if (p > thr).mean() > 0.20:
-            print(f"  WARNING: the model flagged {100 * (p > thr).mean():.0f}% of "
-                  f"undecided messages. The hand-labelled rate is ~3%. Anything "
-                  f"near 20%+ is a broken scoring path, not a strict classifier -- "
-                  f"run --debug-tokens before trusting this.")
+        print(f"  model P(filler): mean {p.mean():.3f}; {int((p > thr).sum()):,} "
+              f"over the review threshold {thr}")
+        if (p > thr).mean() > 0.35:
+            print(f"  WARNING: the model nominated {100 * (p > thr).mean():.0f}% of "
+                  f"undecided messages. The hand-labelled rate is ~3%. Much past "
+                  f"a third is a broken scoring path rather than a cautious "
+                  f"screen -- run --debug-tokens before reading the queue.")
     return df.drop(columns=["_rule", "sq"])
 
 
@@ -418,10 +479,10 @@ def validate(cfg, use_llm, batch_size, show):
                                                 gold["text"].map(squish))["sheet"])
 
     a = res[res["sheet"] == "A"]
-    prf(a["chit_chat"].astype(bool), a["gold"], "SHEET A (random -- the reportable numbers)")
+    prf(a["flagged"].astype(bool), a["gold"], "SHEET A (random -- the reportable numbers)")
     b = res[res["sheet"] == "B"]
     if len(b):
-        prf(b["chit_chat"].astype(bool), b["gold"], "SHEET B (hard cases -- diagnostic only)")
+        prf(b["flagged"].astype(bool), b["gold"], "SHEET B (hard cases -- diagnostic only)")
 
     # BY LENGTH. This is the check that caught the previous failure: a 3B model
     # scored a respectable aggregate while wrongly dropping 18% of ONE-WORD
@@ -429,36 +490,51 @@ def validate(cfg, use_llm, batch_size, show):
     # conventionalised reference LOOKS like by block 4, so an aggregate can look
     # fine while the classifier deletes exactly the signal being measured.
     res["nw"] = res["text"].map(lambda t: len(squish(t).split()))
-    print("\n  REAL DESCRIPTIONS WRONGLY DROPPED, by message length")
+    print("\n  REAL DESCRIPTIONS NOMINATED, by message length (extra reading, not loss)")
     print(f"    {'words':>8s} {'n':>6s} {'dropped':>8s} {'rate':>7s}")
     for lo, hi, lab in [(1, 1, "1"), (2, 2, "2"), (3, 4, "3-4"), (5, 8, "5-8"), (9, 999, "9+")]:
         g = res[(~res["gold"]) & (res["nw"] >= lo) & (res["nw"] <= hi)]
         if len(g):
-            print(f"    {lab:>8s} {len(g):6d} {int(g['chit_chat'].sum()):8d} "
-                  f"{100 * g['chit_chat'].mean():6.1f}%")
+            print(f"    {lab:>8s} {len(g):6d} {int(g['flagged'].sum()):8d} "
+                  f"{100 * g['flagged'].mean():6.1f}%")
 
+    # THE TABLE THIS DESIGN TURNS ON. The model nominates; a person decides. So
+    # the question is not "is it accurate" but "how much do I have to read to
+    # catch nearly all the filler". Recall is the only column that can hurt you:
+    # a missed message is never seen again, while an over-nomination costs a few
+    # seconds. Pick the threshold from here and put it in config.yaml as
+    # referential.review_threshold.
     if use_llm:
-        print("\n  THRESHOLD SWEEP (sheet A)")
-        print(f"    {'thr':>5s} {'recall':>7s} {'precision':>10s} {'descriptions lost':>18s}")
-        for t in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-            pr = a["p_filler"] > t
-            tp = int((pr & a["gold"]).sum()); fp = int((pr & ~a["gold"]).sum())
+        n_full = len(a)
+        print("\n  REVIEW BURDEN vs RECALL (sheet A, and projected to 8,600 msgs "
+              "at 180 games)")
+        print(f"    {'thr':>5s} {'nominated':>10s} {'% corpus':>9s} "
+              f"{'filler found':>13s} {'recall':>7s} {'to read @180g':>14s}")
+        for t in [0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9]:
+            pr = a["flagged"] & ((a["p_filler"] > t) | (a["method"] == "rule"))
+            tp = int((pr & a["gold"]).sum())
             fn = int((~pr & a["gold"]).sum())
             r = tp / (tp + fn) if tp + fn else 0.0
-            p = tp / (tp + fp) if tp + fp else 0.0
-            print(f"    {t:5.1f} {r:7.3f} {p:10.3f} {fp:18d}")
+            share = pr.mean()
+            print(f"    {t:5.2f} {int(pr.sum()):10d} {100 * share:8.1f}% "
+                  f"{tp:8d}/{tp + fn:<4d} {r:7.3f} {round(8600 * share):14,d}")
+        missed = a[(~a["flagged"]) & a["gold"]]
+        if len(missed):
+            print(f"\n    MISSED at the configured threshold ({len(missed)}) -- "
+                  f"these are the only silent errors:")
+            for _, r in missed.iterrows():
+                print(f"      p={r['p_filler']:.2f}  {squish(r['text'])[:64]!r}")
 
     print(f"\n  DISAGREEMENTS (up to {show})")
-    dis = res[res["chit_chat"].astype(bool) != res["gold"]]
+    dis = res[res["flagged"].astype(bool) != res["gold"]]
     for _, r in dis.head(show).iterrows():
-        kind = "dropped a DESCRIPTION" if not r["gold"] else "kept filler"
-        print(f"    [{r['sheet']}] p={r['p_filler']:.2f} {kind:22s} {squish(r['text'])[:64]!r}")
+        kind = "over-nominated" if not r["gold"] else "MISSED filler"
+        print(f"    [{r['sheet']}] p={r['p_filler']:.2f} {kind:16s} {squish(r['text'])[:64]!r}")
     if len(dis) > show:
         print(f"    ... and {len(dis) - show} more (--show N)")
 
-    print("\n  Read these against a 3.05% base rate. Precision matters more than "
-          "recall here:\n  a false positive deletes a convention, a false negative "
-          "adds one message of noise.")
+    print("\n  The model nominates, you decide. RECALL is the number that matters:"
+          "\n  an over-nomination costs seconds of reading, a miss is never seen again.")
 
 
 SELF_TEST = [
@@ -540,20 +616,62 @@ def main():
 
     chats = read_chats(os.path.join(REPO, cfg["paths"]["processed"], "*", "*", "chats.csv"))
     targets = chats[truthy(chats["director_msg"])].copy()
-    print(f"labelling {len(targets):,} director messages of {len(chats):,}")
+    print(f"screening {len(targets):,} director messages of {len(chats):,}")
     res = classify(targets, chats, cfg, use_llm=not args.no_llm, batch_size=args.batch_size)
 
     out = os.path.join(REPO, cfg["paths"]["out"])
     os.makedirs(out, exist_ok=True)
-    path = os.path.join(out, "referential_flags.parquet")
+
+    # Scores, not decisions. THE MODEL DOES NOT DECIDE ANYTHING HERE -- it
+    # nominates messages for a human to rule on, and `02c_apply_review.py`
+    # turns the human's calls into `referential_flags.parquet`, which is the
+    # only file 03_build_corpus.py reads. Until a person has signed off, that
+    # file does not exist and 03 keeps every message. There is no code path in
+    # which a model deletes a description unreviewed.
+    spath = os.path.join(out, "referential_scores.parquet")
     keep = [c for c in ["gameID", "roundID", "playerID", "text", "director_msg",
-                        "p_filler", "chit_chat", "method"] if c in res.columns]
-    res[keep].to_parquet(path, index=False)
-    n = int(res["chit_chat"].sum())
-    print(f"\n  {n:,} of {len(res):,} flagged as filler ({100 * n / len(res):.1f}%)")
-    print(f"  by method: {res.groupby('method')['chit_chat'].sum().to_dict()}")
-    print(f"  wrote {os.path.relpath(path, REPO)}")
-    print("  03_build_corpus.py joins this on (roundID, playerID, text).")
+                        "p_filler", "flagged", "method"] if c in res.columns]
+    res[keep].to_parquet(spath, index=False)
+
+    # The review queue, in the same shape as the hand-labelling sheet: one row
+    # per nominated message, its round on one line with the message marked.
+    q = res[res["flagged"]].copy()
+    ctx = build_contexts(chats)
+    rows = []
+    for i, (_, r) in enumerate(q.sort_values("p_filler", ascending=False).iterrows()):
+        entries = ctx.get(r["roundID"], [("DIRECTOR", squish(r["text"]))])
+        pos = next((k for k, (_, m) in enumerate(entries) if m == squish(r["text"])), 0)
+        rows.append({
+            "row_id": f"R{i:05d}",
+            "gameID": r["gameID"], "roundID": r["roundID"], "playerID": r["playerID"],
+            "method": r["method"], "p_filler": round(float(r["p_filler"]), 3),
+            "text": squish(r["text"]),
+            "round_context": "  |  ".join(
+                f'{w[0]}: {">>> " + m + " <<<" if k == pos else m}'
+                for k, (w, m) in enumerate(entries)),
+            "is_filler": "", "note": "",
+        })
+    qpath = os.path.join(REPO, "data/processed_data/exp_2/annotation/review_queue.csv")
+    os.makedirs(os.path.dirname(qpath), exist_ok=True)
+    if os.path.exists(qpath):
+        prev = pd.read_csv(qpath, dtype=str)
+        n_done = int(prev["is_filler"].notna().sum()) if "is_filler" in prev else 0
+        if n_done:
+            qpath = qpath.replace(".csv", ".new.csv")
+            print(f"\n  existing review_queue.csv has {n_done:,} decisions in it -- "
+                  f"writing to {os.path.basename(qpath)} instead of overwriting")
+    pd.DataFrame(rows).to_csv(qpath, index=False)
+
+    n = len(q)
+    print(f"\n  {n:,} of {len(res):,} messages nominated for review "
+          f"({100 * n / max(1, len(res)):.1f}% of the corpus)")
+    print(f"    by method: {q['method'].value_counts().to_dict()}")
+    print(f"  wrote {os.path.relpath(spath, REPO)}  (scores)")
+    print(f"  wrote {os.path.relpath(qpath, REPO)}  ({n:,} rows to review)")
+    print("\n  Next: fill `is_filler` (1 = not a description, 0 = keep it), then")
+    print("        python analysis/exp2/02c_apply_review.py")
+    print("  03_build_corpus.py reads referential_flags.parquet, which that step")
+    print("  writes. Until then it keeps every message.")
 
 
 if __name__ == "__main__":

@@ -92,18 +92,33 @@ def load_store(cfg, tag):
     return corpus, vecs
 
 
-def analysable(corpus, drop_excluded=True, drop_chitchat=True):
-    """Game-level exclusions.
+def analysable(corpus, drop_excluded=True, drop_chitchat=True,
+               drop_autosubmitted=True):
+    """Game-level and item-level exclusions.
 
     Chit-chat is NOT handled here any more. Because the surviving messages are
     concatenated into one description per round, filtering has to happen before
     the join -- 03_build_corpus.py drops filler messages and emits no unit at all
     for a round whose director said nothing referential. `drop_chitchat` is kept
     as a no-op argument so the CLI flag and call sites stay stable.
+
+    `drop_autosubmitted` removes description items whose per-item clock expired.
+    KNOWN COST, decide deliberately before turning it off or leaving it on:
+    auto-submitted items are the LONGEST in the corpus (median 98 chars vs 41 for
+    manually submitted, only 4% blank) -- they are mostly thorough writers who
+    ran out of clock, not non-responses. And they are 7.6x commoner in the
+    pre-test than the post-test (10.7% vs 1.4%), because the first exposure is
+    slower. So this mask thins the pre-test far harder than the post-test and
+    removes its longest descriptions, which is a bias in the pre->post contrast,
+    not a neutral clean-up. `--keep-autosubmitted` reverses it; the game-level
+    >75% screen (scripts/flag_timeout_games.py) targets the same problem without
+    the length bias.
     """
     m = pd.Series(True, index=corpus.index)
     if drop_excluded:
         m &= ~corpus["excluded_game"].astype(bool)
+    if drop_autosubmitted and "auto_submitted" in corpus.columns:
+        m &= ~corpus["auto_submitted"].astype(bool)
     return corpus[m]
 
 
@@ -235,8 +250,14 @@ def main():
     ap.add_argument("--tag", default=None, help="embedding folder (default: model basename)")
     ap.add_argument("--tables", nargs="*", default=None)
     ap.add_argument("--keep-excluded", action="store_true",
-                    help="do not drop games listed in excluded_games.csv")
+                    help="do not drop games listed in excluded_games.csv / "
+                         "timeout_games.csv")
     ap.add_argument("--keep-chitchat", action="store_true")
+    ap.add_argument("--keep-autosubmitted", action="store_true",
+                    help="do not drop description items whose per-item clock "
+                         "expired. See analysable() -- these are the LONGEST "
+                         "items and 7.6x commoner pre- than post-test, so "
+                         "dropping them is not a neutral clean-up.")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -245,9 +266,15 @@ def main():
     print(f"store  : {len(corpus):,} units, {VECS.shape[0]:,} unique vectors "
           f"({VECS.shape[1]}d), tag={tag}")
 
-    keep = analysable(corpus, not args.keep_excluded, not args.keep_chitchat)
+    keep = analysable(corpus, not args.keep_excluded, not args.keep_chitchat,
+                      not args.keep_autosubmitted)
+    n_excl = int(corpus["excluded_game"].astype(bool).sum())
+    n_auto = 0 if args.keep_autosubmitted or "auto_submitted" not in corpus.columns \
+        else int((corpus["auto_submitted"].astype(bool)
+                  & ~corpus["excluded_game"].astype(bool)).sum())
     print(f"filter : {len(keep):,} analysable units "
-          f"({len(corpus) - len(keep):,} dropped: excluded games)")
+          f"({len(corpus) - len(keep):,} dropped: {n_excl:,} in excluded games, "
+          f"{n_auto:,} auto-submitted items)")
 
     out = os.path.join(REPO, cfg["paths"]["out"], "similarities", tag)
     os.makedirs(out, exist_ok=True)

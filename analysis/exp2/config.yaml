@@ -5,7 +5,12 @@
 
 paths:
   processed: "data/processed_data/exp_2"
-  excluded_games: "data/processed_data/exp_2/excluded_games.csv"
+  # Unioned. excluded_games.csv is hand-adjudicated (AI use, degenerate
+  # responses); timeout_games.csv is DERIVED by scripts/flag_timeout_games.py
+  # from the auto-submit rate -- regenerate it, never hand-edit it.
+  excluded_games:
+    - "data/processed_data/exp_2/excluded_games.csv"
+    - "data/processed_data/exp_2/timeout_games.csv"
   # Derived artefacts. Gitignored -- regenerable from processed_data, and the
   # embedding matrix alone is ~220 MB at full study size.
   out: "data/embeddings/exp_2"
@@ -27,10 +32,14 @@ referential:
   # boundary is Jess's, not the prompt author's.
   model: "Qwen/Qwen3-32B"
   batch_size: 8
-  # Decision threshold on P(filler). The cache stores the probability, so
-  # re-thresholding costs a rerun of this script with no GPU work -- every text
-  # is already scored. Raise it if the classifier is dropping real descriptions.
-  threshold: 0.5
+  # NOMINATION threshold on P(filler) -- not a decision. Everything above it
+  # goes on review_queue.csv for a person to rule on, so a false positive costs
+  # seconds of reading and a false negative is the only silent error. Set it LOW.
+  #
+  # referential_scores.parquet keeps the probability, so re-thresholding is a
+  # rerun of 02c with no GPU work -- every message is already scored.
+  # Pick the value from the burden-vs-recall table that --validate prints.
+  review_threshold: 0.2
 
 embedding:
   # Qwen3-Embedding-0.6B: sentence-transformers native, 1024-dim, strong on MTEB

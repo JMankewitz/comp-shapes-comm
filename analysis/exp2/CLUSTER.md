@@ -1,7 +1,8 @@
 # Exp 2 embeddings + similarities
 
-`00_preprocessing.R` → **`02_referential_filter.py`** → **`03_build_corpus.py`** →
-**`04_embed.py`** → **`05_similarity.py`**
+`00_preprocessing.R` → **`02_referential_filter.py`** → *[human review]* →
+**`02c_apply_review.py`** → **`03_build_corpus.py`** → **`04_embed.py`** →
+**`05_similarity.py`**
 
 (`01_exploratory.qmd` sits outside this chain; it reads the processed CSVs directly.)
 
@@ -39,10 +40,26 @@ pd.read_csv(path, usecols=["gameID","roundID1","roundID2","playerID1","playerID2
 
 ## 02: the referential / chit-chat classifier
 
-Replaces Exp 1's hand coding (44,534 messages read by hand, 1,611 marked). Writes
-`referential_flags.parquet`; `03_build_corpus.py` joins it on
-`(roundID, playerID, text)`. It never edits `chats.csv`, so reclassifying does not
-mutate preprocessed data.
+**The model screens; a person decides.** Filler is ~3% of director messages —
+~260 at the planned 180 games. Few enough to adjudicate by hand, far too many to
+find by reading 8,600 messages. So the model reads all of them and hands back a
+few hundred nominations; the researcher rules on those.
+
+    02_referential_filter.py  ->  referential_scores.parquet   (model, no decisions)
+                              ->  annotation/review_queue.csv  (nominations)
+    [fill in `is_filler`: 1 = drop, 0 = keep]
+    02c_apply_review.py       ->  referential_flags.parquet    (decisions)
+
+`referential_flags.parquet` is the only file `03_build_corpus.py` reads, and
+`02c` is the only thing that writes it. **Until a person signs off it does not
+exist, and 03 keeps every message.** A nominated row left blank is kept and
+reported — the safe default and the lazy default are deliberately the same. No
+code path drops a description unreviewed. Nothing here edits `chats.csv`, so
+re-screening never mutates preprocessed data.
+
+That inverts what to tune for. A false positive costs five seconds of reading; a
+false negative is never seen again. Set `referential.review_threshold` LOW and
+pick it off the burden-vs-recall table `--validate` prints.
 
 **The operative distinction is not "is this a greeting".** It is *does this
 message say anything about what the target shape looks like* — learned from 400
@@ -89,12 +106,13 @@ Qwen2.5-7B run flagged 36–49% of messages — it would have deleted 600–1,70
 descriptions to remove ~100 fillers. Watch **precision** and the by-length table,
 not F1. `--validate` prints both, plus a threshold sweep and every disagreement.
 
-Rule layer alone, scored on those 400: sheet A **recall 0.400, precision 0.667**;
-sheet B **recall 0.474, precision 0.900**. Its only two false drops in 400 are a
-bare `yes` and a bare `no` answering a matcher's question about the shape — cases
-Jess's own labels split 7:2 on, so the rule settles a coin flip rather than
-getting them wrong. The model's job is to lift recall to ~0.9 without adding
-false positives.
+Rule layer alone, scored on those 400: sheet A **recall 0.400**, sheet B
+**recall 0.474**. The model's job is to lift recall toward ~0.95 at a burden you
+are willing to read. Rule hits go on the queue too — they are ~1.3% of the corpus
+and putting them in front of a person makes the audit trail complete rather than
+partly automatic. It also hands the bare `yes`/`no`-answering-a-question case
+(which Jess's own labels split 7:2 on) back to a human, per instance, instead of
+settling a genuine coin flip with a regex.
 
 ### Avoid the two Volta nodes in the jag queue
 
@@ -114,7 +132,7 @@ and then dies in `generate()` with `cudaErrorNoKernelImageForDevice`:
 Exclude the two rather than pinning a type — it costs almost no availability:
 
 ```bash
-nlprun -q jag -g 1 -x jagupard19,jagupard20 -r 60G -c 8 -p low -a compshapes-nlp \
+nlprun -q jag -g 1 -x jagupard19,jagupard20 -r 60G -c 8 -p normal -a compshapes-nlp \
     'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/02_referential_filter.py --self-test'
 ```
 
@@ -152,22 +170,57 @@ under 0.02 for every one, filler included.
 /opt/anaconda3/bin/python analysis/exp2/02_referential_filter.py --validate --no-llm
 
 # full classifier against the 400 hand labels
-nlprun -q jag -g 2 -r 100G -c 8 -p low -a compshapes-nlp \
+nlprun -q sphinx -g 1 -r 100G -c 8 -p normal -a compshapes-nlp \
     'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/02_referential_filter.py --validate'
 
-# label Exp 2
-nlprun -q jag -g 2 -r 100G -c 8 -p low -a compshapes-nlp \
+# screen Exp 2 -> review_queue.csv
+nlprun -q sphinx -g 1 -r 100G -c 8 -p normal -a compshapes-nlp \
     'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/02_referential_filter.py'
+
+# then, on your laptop, after filling in `is_filler`
+/opt/anaconda3/bin/python analysis/exp2/02c_apply_review.py
 ```
 
-### Qwen3-32B needs two cards
+`02` refuses to overwrite a `review_queue.csv` that already has decisions in it —
+it writes `review_queue.new.csv` instead. Re-screening a later wave therefore
+never destroys review work; merge the two queues, or run `02c --queue` against
+each in turn.
 
-bf16 weights alone are ~66 GB, so `-g 1` OOMs on every card in the jag queue.
-`device_map="auto"` shards across whatever it is given, so `-g 2` works. If the
-queue is busy, `Qwen3-14B` is ~28 GB and fits one card — and for a binary
-judgement scored off two logits it may well be enough. Set
-`referential.model` in `config.yaml` and run `--validate` for each; the harness
-answers the question in one job rather than by argument.
+### Size the GPU request to the weights, and PIN THE CARD TYPE
+
+bf16 weights are ~2 GB per billion parameters, plus ~15% for activations and KV:
+
+| model | needs | fits on |
+|---|---|---|
+| Qwen3-32B | ~74 GB | one a100/h100 (`-q sphinx -g 1`), or 2 x a6000 (`-d a6000 -g 2`) |
+| Qwen3-14B | ~32 GB | one a6000/rtx6000ada (`-d a6000 -g 1`), or 2 x a5000 |
+| Qwen3-8B  | ~18 GB | any card in the table above |
+
+**`device_map="auto"` does not error when a model does not fit.** It fills the
+GPUs, spills the remainder to CPU RAM, and runs for hours while appearing to
+work — the only visible symptom is a slow weight load. A Qwen3-32B job on
+`-g 2` landed on 2 x a5000 (48 GB against 74 GB) and did exactly that.
+
+Without `-d`, the scheduler is free to hand you a5000s, so **an unpinned request
+is a lottery you will sometimes lose.** `score()` now checks total visible VRAM
+against a parameter count parsed from the model name and exits in seconds with
+the shortfall and the fix, rather than after six minutes of loading.
+
+```bash
+# Qwen3-32B, one 80 GB card. Cleanest if sphinx has capacity.
+nlprun -q sphinx -g 1 -r 100G -c 8 -p normal -a compshapes-nlp \
+    'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/02_referential_filter.py --self-test --batch-size 8'
+
+# Qwen3-32B on the jag queue: two 48 GB a6000s.
+nlprun -q jag -d a6000 -g 2 -r 100G -c 8 -p normal -a compshapes-nlp \
+    'cd /nlp/scr/jmank/comp-shapes && python analysis/exp2/02_referential_filter.py --self-test'
+```
+
+If both queues are congested, `Qwen3-14B` fits a single a6000 and for a binary
+judgement scored off two logits it may well match 32B — set `referential.model`
+in `config.yaml` and let `--validate` settle it in one job instead of an
+argument. Escalate only if 14B misses the target (filler recall ~0.9, no drops
+at 2+ words).
 
 
 
