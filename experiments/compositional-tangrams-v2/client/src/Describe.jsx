@@ -74,6 +74,15 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
   const shownAt = useRef(Date.now());
   const inputRef = useRef(null);
   const [secsLeft, setSecsLeft] = useState(secondsPerItem);
+  // Paste is BLOCKED here and the attempt is RECORDED. Blocking alone would be
+  // security theatre -- anyone can retype -- but the description phase is solo
+  // and untimed-per-word, so there is no legitimate reason to paste into it, and
+  // two of the three AI exclusions so far were verbatim pastes (one still
+  // carried the model's own "Description:" prefix). Recording matters more than
+  // blocking: it turns a chars/sec inference into a hard per-item flag. The
+  // chat box is deliberately NOT blocked -- see Game.jsx.
+  const pasteAttempts = useRef(0);
+  const [pasteWarned, setPasteWarned] = useState(false);
 
   const item = items[idx];
   // Read from the player, not the game: the game scope is not reliably available
@@ -94,8 +103,19 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
   useEffect(() => {
     shownAt.current = Date.now();
     setSecsLeft(secondsPerItem);
+    pasteAttempts.current = 0;
+    setPasteWarned(false);
     inputRef.current?.focus();
   }, [idx, secondsPerItem]);
+
+  // preventDefault stops the insert; the counter is what the analysis reads.
+  // onDrop is the second paste path -- dragging selected text into a textarea
+  // does not fire a paste event, so blocking only onPaste leaves a hole.
+  const blockPaste = (e) => {
+    e.preventDefault();
+    pasteAttempts.current += 1;
+    setPasteWarned(true);
+  };
 
   // Per-item countdown. Bounding each ITEM rather than the phase means a slow
   // start cannot eat the whole budget, the total is deterministic
@@ -151,6 +171,10 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
         // Flagged so the analysis can identify (and if needed exclude) responses
         // the participant did not choose to submit.
         autoSubmitted: auto,
+        // How many times they tried to paste into THIS item. Always 0 unless
+        // they tried, so a non-zero value is a deliberate act, not noise. The
+        // text stored is what they typed -- the paste never landed.
+        pasteAttempts: pasteAttempts.current,
       },
     ], { private: true });
 
@@ -369,10 +393,23 @@ export function Describe({ phase, onComplete, doneMessage, secondsPerItem = 60 }
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
+        onPaste={blockPaste}
+        onDrop={blockPaste}
+        onDragOver={(e) => e.preventDefault()}
         rows={3}
         className="w-full max-w-lg border rounded-md p-2 mb-3"
         placeholder="Type your description…"
       />
+
+      {/* A silently dead text box reads as a bug and generates support messages
+          and returns, which cost more than the paste would have. Say what
+          happened and why. */}
+      {pasteWarned && (
+        <p className="text-sm text-amber-700 mb-3 text-center max-w-lg">
+          Pasting is turned off here — please type your description in your own
+          words.
+        </p>
+      )}
 
       <div
         className={`text-sm mb-3 tabular-nums transition-colors ${

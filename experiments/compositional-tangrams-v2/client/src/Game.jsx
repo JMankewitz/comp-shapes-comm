@@ -124,8 +124,24 @@ export function Game() {
         </div>
       </div>
 
-      <div className="h-full w-128 border-l flex justify-center items-center">
-        <Chat scope={round} player={player} attribute="chat" 
+      {/* Paste in the chat box is RECORDED but NOT blocked.
+          Empirica's <Chat> renders a plain <textarea name="message"> with no
+          paste handling of its own, so onPasteCapture on this wrapper sees the
+          event -- React routes synthetic events through the root container, so
+          preventDefault() here WOULD block it. It deliberately does not.
+          Participants re-send their own earlier wording as a convention settles
+          ("White chevron cutout." three times in the pilot), and that reduction
+          is the DV. Blocking paste would make the convergent behaviour more
+          effortful than the non-convergent one and put a thumb on DV1/DV5.
+          A count is enough: nobody drafts tangram descriptions elsewhere and
+          pastes them in, so a non-zero value is worth a look. */}
+      <div className="h-full w-128 border-l flex justify-center items-center"
+           onPasteCapture={() => {
+             player.set("chatPasteAttempts",
+                        (player.get("chatPasteAttempts") || 0) + 1,
+                        { private: true });
+           }}>
+        <Chat scope={round} player={player} attribute="chat"
         />
       </div>
     </div>

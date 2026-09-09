@@ -1,2 +1,6 @@
 gameID,reason,found
 01M0XEP3TSE5MTCHYTC004C3XD,AI-generated descriptions: one 236-char LLM output pasted verbatim across 6+ items in 4 cells; typing rates 63-209 chars/sec; 20 pretest items yielded 8 unique texts,2026-08-27
+01M1HNZ7HJEQPEYJ9VDNGQFHBJ,unusable pretest: 6 of 8 items blank (noncomp 8-item pretest); no pre->post pair possible,2026-09-04
+01M1HNZK6GZFFJ98G9C97SZE0A,self-disclosed AI use: director 69b47e636ddad01cd442d2e6 answered ai_used=some on the exit disclosure; the only non-none disclosure in the dataset,2026-09-09
+01M1PVPY05YMN5QBCZG3YB2C9A,AI-generated pretest: director 69ff53f3401c96094c4b05ab pasted an LLM reply verbatim including its literal 'Description:' prefix; all 8 items in polished LLM register vs a plainly human partner; 19 chars/sec on item 0; declared ai_used=none,2026-09-09
+01M14SGHSZFM9JBEJ22KKAENMP,suspected AI-assisted descriptions: matcher 5cd4ad19f014930017d35d6a hit the 60s auto-submit cap on 35 of 40 items (highest in the study; median across 198 players is 0) writing polished LLM-register prose that does not match their plainly human chat register; declared ai_used=none,2026-09-09
