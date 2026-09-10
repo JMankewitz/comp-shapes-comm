@@ -14,6 +14,7 @@
       "full_sample/2026-09-04-20-32-20",
       "full_sample/2026-09-08-14-01-45",
       "full_sample/2026-09-08-20-15-28",
+      "full_sample/2026-09-10-00-11-24",
       "pilot_v1/2026-08-25-02-21-47",
       "pilot_v1/2026-08-25-16-26-42",
       "pilot_v1/2026-08-25-18-24-02",
@@ -28,6 +29,12 @@
     "noncomp"
   ],
   "set_ids": [
+    8,
+    0,
+    1,
+    3,
+    5,
+    7,
     14,
     16,
     18,
@@ -101,6 +108,12 @@
   "notes": "Set ids for THIS wave only, derived from completed dyads in prior runs. tajriba.json is ephemeral and may be wiped between waves; coverage is tracked in the data exports, not the runtime tally. `targets` gives the REMAINING dyads per condition per set; 0 means that cell is finished. Requires a server bundle that understands exp2-schedule-2 -- an older one throws on load rather than ignoring the targets.",
   "targets": {
     "comp-within": {
+      "8": 1,
+      "0": 2,
+      "1": 2,
+      "3": 2,
+      "5": 2,
+      "7": 2,
       "14": 2,
       "16": 2,
       "18": 2,
@@ -172,6 +185,12 @@
       "94": 2
     },
     "comp-between": {
+      "8": 2,
+      "0": 2,
+      "1": 2,
+      "3": 2,
+      "5": 2,
+      "7": 2,
       "14": 2,
       "16": 2,
       "18": 2,
@@ -243,6 +262,12 @@
       "94": 2
     },
     "noncomp": {
+      "8": 2,
+      "0": 2,
+      "1": 2,
+      "3": 2,
+      "5": 2,
+      "7": 2,
       "14": 2,
       "16": 2,
       "18": 2,
