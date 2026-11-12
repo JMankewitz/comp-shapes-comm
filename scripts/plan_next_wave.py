@@ -109,6 +109,23 @@ def is_real_participant(pid):
     return bool(PROLIFIC_ID.match(pid))
 
 
+def excluded_studies():
+    """Study folders under processed_data/exp_2 that must never be pooled.
+
+    Read from excluded_studies.csv (tracked, one row per study, with the reason).
+    Folder-level rather than per-game: a wave judged invalid as a whole should
+    drop out entirely, and listing its gameIDs one by one in excluded_games.csv
+    would hide that it was a single decision. ingest_exports.py deliberately
+    does NOT use this -- it must still see these folders to know their exports
+    are already ingested, or it would download them again.
+    """
+    path = os.path.join(PROCESSED, "excluded_studies.csv")
+    if not os.path.exists(path):
+        return set()
+    with open(path) as fh:
+        return {r["study"].strip() for r in csv.DictReader(fh) if (r.get("study") or "").strip()}
+
+
 def load_game_ids(paths):
     """Union of the gameID column across one or more override CSVs.
 
@@ -208,7 +225,19 @@ def load_coverage(runs, excluded_games=frozenset(), included_games=frozenset()):
             for row in csv.DictReader(f):
                 if str(row.get("completedStudy", "")).strip().upper() not in ("TRUE", "1"):
                     continue
-                if not is_real_participant(row.get("prolificID", "")):
+                # `real_participant` is precomputed by 00_preprocessing.R.
+                # players.csv no longer carries prolificID -- it moved to
+                # private/ when identifiers were quarantined -- so checking the
+                # ID here made every player look like a test account and
+                # coverage reported 0 completed players across 130 games. Fall
+                # back to the ID for files written before the column existed
+                # (exp_1, and exp_2 exports preprocessed before 2026-09).
+                flag = row.get("real_participant")
+                if flag is not None and str(flag).strip() != "":
+                    if str(flag).strip().upper() not in ("TRUE", "1"):
+                        excluded.add(row.get("playerID", ""))
+                        continue
+                elif not is_real_participant(row.get("prolificID", "")):
                     excluded.add(row.get("prolificID", ""))
                     continue
                 pid = row.get("playerID") or row.get("id")
@@ -288,10 +317,17 @@ def main():
     # The layout is <study>/<wave> (e.g. pilot_v1/run_1) but nothing here depends
     # on that: coverage is deduplicated by ULID, so extra or overlapping folders
     # are harmless.
+    # Folders under an excluded study (excluded_studies.csv) are dropped from
+    # auto-discovery. An explicit --runs is taken as given.
+    skip = excluded_studies()
     runs = args.runs or sorted(
-        os.path.relpath(os.path.dirname(g), PROCESSED)
-        for g in glob.glob(os.path.join(PROCESSED, "**", "games.csv"), recursive=True)
+        r for r in (os.path.relpath(os.path.dirname(g), PROCESSED)
+                    for g in glob.glob(os.path.join(PROCESSED, "**", "games.csv"), recursive=True))
+        if r.split(os.sep)[0] not in skip
     )
+    if skip and not args.runs:
+        print(f"  skipping excluded study folder(s): {', '.join(sorted(skip))} "
+              f"(excluded_studies.csv)", file=sys.stderr)
     if not runs:
         print("No processed runs found under data/processed_data/exp_2. Nothing collected yet; "
               "the current schedule stands.", file=sys.stderr)

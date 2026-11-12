@@ -27,6 +27,7 @@ factors:
         - value: 2
         - value: 3
         - value: 5
+        - value: 10
     - name: selectionDuration
       values:
         - value: 60
@@ -134,7 +135,7 @@ treatments:
         contextStructure: comp-within
         describeSecondsPerItem: 60
         feedbackDuration: 3
-        maxTimeout: 5
+        maxTimeout: 10
         numRepetitionsWithPartner: 4
         playerCount: 2
         selectionDuration: 60
@@ -146,7 +147,7 @@ treatments:
         contextStructure: comp-between
         describeSecondsPerItem: 60
         feedbackDuration: 3
-        maxTimeout: 5
+        maxTimeout: 10
         numRepetitionsWithPartner: 4
         playerCount: 2
         selectionDuration: 60
@@ -161,7 +162,7 @@ treatments:
         contextStructure: noncomp
         describeSecondsPerItem: 60
         feedbackDuration: 3
-        maxTimeout: 5
+        maxTimeout: 10
         numRepetitionsWithPartner: 4
         playerCount: 2
         selectionDuration: 60

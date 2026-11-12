@@ -77,9 +77,12 @@ def main():
     rows, skipped = [], 0
 
     for cat in cats:
-        path = os.path.join(folder, FILES[cat])
+        # The paste files carry Prolific IDs, so preprocessing writes them to
+        # private/ (gitignored). Reading the wave folder itself finds nothing and
+        # records nothing -- silently, which is the failure mode that matters.
+        path = os.path.join(folder, "private", FILES[cat])
         if not os.path.isfile(path):
-            print(f"  {FILES[cat]}: not present, skipping")
+            print(f"  private/{FILES[cat]}: not present, skipping")
             continue
         pairs = read_pairs(path)
         fresh = [(p, a) for p, a in pairs if p.split("@")[0] not in already]

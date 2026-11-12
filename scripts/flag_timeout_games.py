@@ -51,6 +51,30 @@ def is_auto(row):
     return str(row.get("autoSubmitted", "")).strip().upper() in TRUTHY
 
 
+def excluded_studies():
+    """Study folders under processed_data/exp_2 that must never be pooled.
+
+    Read from excluded_studies.csv (tracked, one row per study, with the reason).
+    Folder-level rather than per-game: a wave judged invalid as a whole should
+    drop out entirely, and listing its gameIDs one by one in excluded_games.csv
+    would hide that it was a single decision. ingest_exports.py deliberately
+    does NOT use this -- it must still see these folders to know their exports
+    are already ingested, or it would download them again.
+    """
+    path = os.path.join(PROCESSED, "excluded_studies.csv")
+    if not os.path.exists(path):
+        return set()
+    with open(path) as fh:
+        return {r["study"].strip() for r in csv.DictReader(fh) if (r.get("study") or "").strip()}
+
+
+def pooled(name):
+    """Every <name>.csv under PROCESSED, minus excluded study folders."""
+    skip = excluded_studies()
+    return sorted(p for p in glob.glob(os.path.join(PROCESSED, "**", name), recursive=True)
+                  if os.path.relpath(p, PROCESSED).split(os.sep)[0] not in skip)
+
+
 def load_descriptions():
     """Every description row across every wave, deduplicated.
 
@@ -60,8 +84,7 @@ def load_descriptions():
     inflate both the numerator and the denominator unpredictably.
     """
     seen, rows = set(), []
-    for path in sorted(glob.glob(os.path.join(PROCESSED, "**", "descriptions.csv"),
-                                 recursive=True)):
+    for path in pooled("descriptions.csv"):
         with open(path) as f:
             for r in csv.DictReader(f):
                 key = (r.get("playerID"), r.get("phase"), r.get("order"), r.get("image"))
@@ -74,8 +97,7 @@ def load_descriptions():
 
 def game_meta():
     meta = {}
-    for path in sorted(glob.glob(os.path.join(PROCESSED, "**", "games.csv"),
-                                 recursive=True)):
+    for path in pooled("games.csv"):
         with open(path) as f:
             for r in csv.DictReader(f):
                 meta.setdefault(r["gameID"], r)

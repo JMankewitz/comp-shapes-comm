@@ -18,6 +18,8 @@ import { MyPlayerForm } from "./intro-exit/PlayerCreate.jsx";
 import {Quiz} from "./intro-exit/Quiz";
 import { Posttest } from "./intro-exit/Posttest";
 import { Finished } from "./intro-exit/Finished";
+import { CatchingUp } from "./components/CatchingUp";
+import { WaitingLobby } from "./components/WaitingLobby";
 export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const playerKey = urlParams.get("participantKey") || "";
@@ -91,7 +93,8 @@ export default function App() {
         <EmpiricaMenu position="bottom-left" />
         <div className="h-full overflow-auto">
           <EmpiricaContext playerCreate={MyPlayerForm} introSteps={introSteps}
-          exitSteps={exitSteps} finished={Finished}>
+          exitSteps={exitSteps} finished={Finished}
+          loading={CatchingUp} lobby={WaitingLobby}>
             <Game />
           </EmpiricaContext>
         </div>

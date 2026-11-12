@@ -488,9 +488,15 @@ Empirica.onRoundEnded(({ round }) => {
   game.set("numRoundsInactive", worstInactive);
 
   console.log(`Game ${game.id} - ${round.get("trialNum")}/${round.get("numTrials")}`);
+  // `t=` is when this callback RAN, in epoch ms. The line above has no time of
+  // its own, which on 2026-09-11 forced round durations to be reconstructed by
+  // interpolation. When the callback queue is congested this is also the moment
+  // that matters: the round is not "done" until its end-of-round callback runs.
+  // scripts/wave_monitor.py reads it.
   console.log(
     `- target: "${target}", selection: "${currentSelection}", ` +
-    `messages: ${messageCount}, inactive per player: ${JSON.stringify(perPlayerInactive)}`
+    `messages: ${messageCount}, inactive per player: ${JSON.stringify(perPlayerInactive)}, ` +
+    `t=${Date.now()}`
   );
 
   if (worstInactive >= game.get("maxTimeout")) {

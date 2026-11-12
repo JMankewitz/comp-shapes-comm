@@ -18,6 +18,11 @@ export const PAY = {
 
 export const money = (n) => `$${n.toFixed(2)}`;
 
+// How long a participant may wait for a partner. MUST match the lobby timeout in
+// .empirica/lobbies.yaml ("10m individual Kick"); the waiting screen counts down
+// from this, so if they drift the countdown will lie.
+export const LOBBY_MINUTES = 10;
+
 const gaveText = (arr) =>
   Array.isArray(arr) && arr.some((r) => String(r?.text || "").trim() !== "");
 

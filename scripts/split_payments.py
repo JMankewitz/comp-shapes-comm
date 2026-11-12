@@ -79,7 +79,9 @@ def read_ids(path):
 
 
 def load_payments(wave):
-    path = os.path.join(PROCESSED, wave, "payments.csv")
+    # payments.csv carries Prolific IDs, so preprocessing writes it to private/
+    # (gitignored) along with the paste files this script produces.
+    path = os.path.join(PROCESSED, wave, "private", "payments.csv")
     if not os.path.isfile(path):
         sys.exit(f"no payments.csv at {path}\n"
                  f"  run: python3 scripts/ingest_exports.py --into <study> --preprocess")
