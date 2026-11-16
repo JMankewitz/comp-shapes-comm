@@ -20,11 +20,11 @@
 // reached the end of training -- so bonus decisions can still be made per group.
 export const COMPLETION_CODES = {
   // Finished the post-test and the exit survey.
-  COMPLETE: "C1NK2P4O",
+  COMPLETE: "CGLXE8O2",
 
   // Reached a game, but it ended before training finished (inactivity timeout,
   // or a partner who dropped).
-  INCOMPLETE: "C1NK2P4O",
+  INCOMPLETE: "CGLXE8O2",
 
   // Never matched into a game at all (lobby timeout, no partner available).
   //
