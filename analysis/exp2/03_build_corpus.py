@@ -108,10 +108,31 @@ def read_csv_dedup(paths, key_cols=None):
     return df.drop_duplicates(subset=key_cols) if key_cols else df.drop_duplicates()
 
 
+def excluded_studies(processed):
+    """Study folders under processed_data/exp_2 that must never be pooled.
+
+    Read from excluded_studies.csv (tracked, one row per study, with the reason).
+    Folder-level rather than per-game: a wave judged invalid as a whole should
+    drop out entirely, and listing its gameIDs one by one in excluded_games.csv
+    would hide that it was a single decision. ingest_exports.py deliberately
+    does NOT use this -- it must still see these folders to know their exports
+    are already ingested, or it would download them again.
+    """
+    path = os.path.join(processed, "excluded_studies.csv")
+    if not os.path.exists(path):
+        return set()
+    with open(path) as fh:
+        return {r["study"].strip() for r in csv.DictReader(fh) if (r.get("study") or "").strip()}
+
+
 def discover_runs(processed):
+    skip = excluded_studies(processed)
+    if skip:
+        print(f"skipping excluded study folder(s): {', '.join(sorted(skip))}")
     return sorted(
-        os.path.relpath(os.path.dirname(g), processed)
-        for g in glob.glob(os.path.join(processed, "**", "games.csv"), recursive=True)
+        r for r in (os.path.relpath(os.path.dirname(g), processed)
+                    for g in glob.glob(os.path.join(processed, "**", "games.csv"), recursive=True))
+        if r.split(os.sep)[0] not in skip
     )
 
 

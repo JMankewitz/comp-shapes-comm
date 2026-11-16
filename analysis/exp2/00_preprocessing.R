@@ -449,6 +449,20 @@ write_csv(d_trial_timing,  file.path(processed_folder, "trial_timing.csv"))
 
 # players.csv keeps the exit survey (age, gender, strategy, feedback) but NOT
 # the Prolific ID -- those fields are only identifying in combination with it.
+#
+# `real_participant` REPLACES the ID for the one job downstream code used it
+# for. scripts/plan_next_wave.py filtered test runs by checking the Prolific ID
+# matched ^[0-9a-f]{24}$ -- hand-typed keys ("test0") reach completedStudy
+# exactly like real dyads and would otherwise consume set slots. Dropping the ID
+# silently made every player fail that test, so coverage read 0 completed
+# players across 130 games. Emitting the boolean keeps the check working without
+# putting an identifier in the shareable tree, and works for a collaborator who
+# has no private/ at all.
+d_players_out <- d_players_out |>
+  mutate(real_participant = str_detect(
+    str_to_lower(str_split_i(coalesce(prolificID, ""), "@", 1)),
+    "^[0-9a-f]{24}$"))
+
 write_csv(select(d_players_out, -any_of(c("prolificID", "id_source"))),
           file.path(processed_folder, "players.csv"))
 

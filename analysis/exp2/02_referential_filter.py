@@ -152,14 +152,22 @@ def read_chats(pattern):
     pilot_v1 naively gives 2,812 rows for 1,932 real messages -- 45% duplicates,
     every one of them scored twice and counted twice in any evaluation.
     """
-    files = sorted(glob.glob(pattern))
+    # Drop folders under an excluded study (excluded_studies.csv): a wave judged
+    # invalid as a whole must not feed the classifier or its evaluation.
+    root = os.path.join(REPO, "data", "processed_data", "exp_2")
+    skip_path = os.path.join(root, "excluded_studies.csv")
+    skip = (set(pd.read_csv(skip_path, dtype=str)["study"].str.strip())
+            if os.path.exists(skip_path) else set())
+    files = [f for f in sorted(glob.glob(pattern))
+             if os.path.relpath(f, root).split(os.sep)[0] not in skip]
     if not files:
         sys.exit(f"No chats.csv matched {pattern}")
     df = pd.concat([pd.read_csv(f, dtype=str, engine="python") for f in files],
                    ignore_index=True)
     n_raw = len(df)
     df = df.drop_duplicates(subset=["roundID", "playerID", "text"]).reset_index(drop=True)
-    print(f"  {len(files)} file(s): {n_raw:,} rows -> {len(df):,} deduped")
+    print(f"  {len(files)} file(s): {n_raw:,} rows -> {len(df):,} deduped"
+          + (f" (skipped excluded: {', '.join(sorted(skip))})" if skip else ""))
     return df
 
 

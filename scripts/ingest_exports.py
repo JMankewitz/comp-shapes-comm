@@ -36,6 +36,10 @@ Usage:
     python3 scripts/ingest_exports.py --into pilot_v1 --dry-run
     python3 scripts/ingest_exports.py --into full_v1 --preprocess
     python3 scripts/ingest_exports.py --into pilot_v1 --no-fetch --preprocess
+
+    # exports on a different VM (e.g. the big instance):
+    python3 scripts/ingest_exports.py --into full_sample --preprocess \\
+        --host instance-20260113-201755 --zone us-central1-c
 """
 
 import argparse
@@ -141,6 +145,7 @@ def run_preprocess(study, folder):
 
 
 def main():
+    global HOST, ZONE
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     # Deliberately NO default. The study folder is the only thing recording
@@ -159,7 +164,20 @@ def main():
                          "complete output (use after changing 00_preprocessing.R)")
     ap.add_argument("--preprocess", action="store_true",
                     help="run analysis/exp2/00_preprocessing.R for each new folder")
+    # Which VM holds the exports. Defaults to the original small VM so old
+    # invocations behave exactly as before; pass these for any other server
+    # (2026-11-16: the big instance), otherwise the script lists the WRONG
+    # machine's exports and reports "nothing new".
+    ap.add_argument("--host", default=None,
+                    help=f"VM that holds the exports (default {HOST})")
+    ap.add_argument("--zone", default=None,
+                    help=f"that VM's zone (default {ZONE})")
     args = ap.parse_args()
+    if args.host:
+        HOST = args.host
+    if args.zone:
+        ZONE = args.zone
+    print(f"VM: {HOST} ({ZONE})")
 
     # A typo in --into silently opens a new study rather than failing, which
     # would scatter one wave's data across two folders. Requiring the flag stops

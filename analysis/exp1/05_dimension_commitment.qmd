@@ -1,0 +1,627 @@
+---
+title: "Exp 1: dimension commitment in across-trial dyads"
+subtitle: "Model check for documents/model-design.md §5"
+format:
+  html:
+    toc: true
+    code-fold: true
+    df-print: paged
+editor: source
+---
+
+<!--
+READ-ONLY ANALYSIS. This notebook reads only existing processed data and writes
+only to analysis/figures/. It does not call, source, or modify any preprocessing
+script, and it does not write to data/. Exp 1 is frozen; in particular the
+hand-coded chit-chat labels in run_v3 must not be regenerated.
+
+Purpose: test the three predictions in documents/model-design.md §5 before any
+model code is written. §5's prediction is falsifiable and gates §2.6's credit
+rule and the asymmetric-generalization prediction in §6.
+-->
+
+```{r setup}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(lmerTest)
+library(here)
+library(broom.mixed)
+library(knitr)
+
+theme_set(theme_minimal(base_size = 12))
+
+color_map <- c(
+  "No Competitor" = "#FCAD12FF",
+  "Within Trial"  = "#85216BFF",
+  "Across Trial"  = "#CB4149FF"
+)
+
+old_conditions      <- c("noncomp", "comp-within", "comp-between")
+new_conditions_long <- c("No Competitor", "Within Trial", "Across Trial")
+
+final_game_set <- "run_v3"
+data_root      <- here("data", "processed_data", "exp_1")
+fig_path       <- here("analysis", "figures")
+
+# Exp 1 exclusions, reproduced from 03_setup-annotations.R rather than sourced,
+# so this notebook stays read-only.
+game_blacklist <- c(
+  "01JGZ1J4WKTCRGQS8R8214JJH2", # AI response
+  "01JGMPEGCD0EX4TXSSNEY3A670"  # AI response
+)
+
+FINAL_BLOCK <- 3  # repNum is 0-indexed; 4 blocks of 16 trials
+```
+
+## 1. Load
+
+Note the data path. The published notebooks use
+`here("data", "processed_data", final_game_set)`; the processed data has since
+moved under `exp_1/`, so the path here is
+`here("data", "processed_data", "exp_1", final_game_set)`. The published
+notebooks have not been updated, deliberately — Exp 1 is frozen.
+
+```{r load}
+#| message: false
+load_data <- function(data_name) {
+  files <- list.files(
+    path       = file.path(data_root, final_game_set),
+    recursive  = TRUE,
+    pattern    = paste0("^", data_name, "\\.csv$"),
+    full.names = TRUE
+  )
+  stopifnot(length(files) > 0)
+  map_dfr(files, read.csv)
+}
+
+d_game   <- load_data("games")
+d_round  <- load_data("rounds")
+d_chat   <- load_data("chats")
+
+# 205 MB / ~970k rows. text1 and text2 are long strings and are not needed here;
+# dropping them on read keeps the swap-and-bind in §2 from doubling them.
+d_chat_similarity <- readr::read_csv(
+  file.path(data_root, "message_similarities.csv"),
+  col_select = c(gameID, roundID1, roundID2, similarity),
+  show_col_types = FALSE
+)
+
+d_game <- d_game |>
+  mutate(contextStructure_f = factor(contextStructure,
+                                     levels = old_conditions,
+                                     labels = new_conditions_long),
+         contextStructure_f = relevel(contextStructure_f, ref = "No Competitor"))
+```
+
+### Exclusions
+
+Reproduces the published filter. The assertion is the guard: if this stops
+returning 450 dyads, something upstream has changed and every number below is
+suspect.
+
+```{r exclusions}
+game_stats <- d_round |>
+  left_join(d_game |> select(gameID, contextStructure, contextStructure_f),
+            by = "gameID") |>
+  group_by(gameID, contextStructure, contextStructure_f) |>
+  summarize(n_correct  = sum(correct, na.rm = TRUE),
+            n_responses = sum(!is.na(response)),
+            .groups = "drop") |>
+  filter(n_responses > 0) |>
+  mutate(non_response_rate = n_responses < 32,
+         inaccuracy        = n_correct / n_responses < .75,
+         blacklist         = gameID %in% game_blacklist,
+         kept_game         = !non_response_rate & !inaccuracy & !blacklist)
+
+kept_games <- game_stats |> filter(kept_game) |> pull(gameID)
+
+game_stats |>
+  filter(kept_game) |>
+  count(contextStructure_f, name = "n_dyads") |>
+  kable(caption = "Dyads retained by condition")
+
+cat("Total kept dyads:", length(kept_games), "\n")
+stopifnot(length(kept_games) == 450)
+```
+
+```{r filter}
+d_game_f  <- d_game  |> filter(gameID %in% kept_games)
+d_round_f <- d_round |> filter(gameID %in% kept_games)
+d_chat_f  <- d_chat  |> semi_join(d_round_f, by = "roundID")
+d_sim_f   <- d_chat_similarity |> filter(gameID %in% kept_games)
+```
+
+## 2. The signed dimension index
+
+The published analysis (`02_cogsci2025_analyses.qmd:532`) computes, for each
+shape, how similar its descriptions are to descriptions of shapes sharing its
+top versus shapes sharing its bottom, then takes
+
+```r
+sim_diff = abs(`bottom-match` - `top-match`)
+```
+
+The `abs()` is what this notebook removes. The **signed** difference
+
+```
+dimension index = sim(top-match) - sim(bottom-match)
+```
+
+is a per-dyad measure of which component the dyad indexes on. A top-indexer
+describes A2, A3, A4 the same way (high top-match similarity) and C2, A2
+differently (low bottom-match similarity), giving a large positive index. A
+balanced compositional dyad names both components and the index sits near zero.
+A holistic dyad has low similarity on both sides, also near zero — so the index
+alone does not separate balanced from holistic, which is why §3 looks at mean
+and variance separately and §4 adds a lexical measure.
+
+```{r build-index}
+d_sim_full <- d_sim_f |>
+  left_join(d_round_f |> select(roundID1 = roundID, target1 = target,
+                                index1 = index, repNum1 = repNum),
+            by = "roundID1") |>
+  left_join(d_round_f |> select(roundID2 = roundID, target2 = target,
+                                index2 = index, repNum2 = repNum),
+            by = "roundID2") |>
+  left_join(d_game_f |> select(gameID, contextStructure_f), by = "gameID") |>
+  mutate(top1    = str_extract(target1, "(?<=/)[^/]+(?=_)"),
+         top2    = str_extract(target2, "(?<=/)[^/]+(?=_)"),
+         bottom1 = str_extract(target1, "(?<=_)[^_]+(?=\\.png)"),
+         bottom2 = str_extract(target2, "(?<=_)[^_]+(?=\\.png)"))
+
+# The similarity file stores each pair once; mirror it so every round appears
+# as roundID1. Matches the swap-and-bind in 02_cogsci2025_analyses.qmd:489.
+swapped <- d_sim_full |>
+  rename_with(~ paste0(., "_tmp"), ends_with("1")) |>
+  rename_with(~ sub("2$", "1", .), ends_with("2")) |>
+  rename_with(~ sub("1_tmp$", "2", .), ends_with("1_tmp"))
+
+sim_pairs <- bind_rows(d_sim_full, swapped) |>
+  filter(roundID1 != roundID2)
+
+# Within-block pairs of *different* shapes, labelled by what they share.
+# case_when order matters only for pairs sharing both components, which cannot
+# occur in a 4x4 matrix once target1 != target2.
+subshape_pairs <- sim_pairs |>
+  filter(repNum1 == repNum2, target1 != target2) |>
+  mutate(match = case_when(top1 == top2    ~ "top_match",
+                           bottom1 == bottom2 ~ "bottom_match",
+                           TRUE               ~ "non_match"))
+
+shape_sim <- subshape_pairs |>
+  filter(match != "non_match") |>
+  group_by(gameID, contextStructure_f, repNum1, target1, match) |>
+  summarize(mean_sim = mean(similarity, na.rm = TRUE), .groups = "drop") |>
+  pivot_wider(names_from = match, values_from = mean_sim) |>
+  filter(!is.na(top_match), !is.na(bottom_match)) |>
+  mutate(dim_index = top_match - bottom_match,   # signed: the new quantity
+         abs_index = abs(dim_index))              # published quantity
+```
+
+### Sanity check against the published result
+
+Before interpreting anything, confirm that the unsigned version reproduces the
+published coefficients: Across Trial starts higher (β ≈ 0.069) and grows over
+blocks (β ≈ 0.054), Within Trial flat (β ≈ 0.001, *p* = .78). If this does not
+reproduce, the pipeline is wrong and §3–§5 are meaningless.
+
+```{r sanity}
+abs_model <- lmer(abs_index ~ contextStructure_f * repNum1 + (1 | gameID),
+                  data = shape_sim |>
+                    filter(contextStructure_f != "No Competitor") |>
+                    mutate(contextStructure_f =
+                             relevel(droplevels(contextStructure_f),
+                                     ref = "Within Trial")))
+
+tidy(abs_model, effects = "fixed") |>
+  mutate(across(where(is.numeric), ~ round(., 4))) |>
+  kable(caption = "Unsigned index — should reproduce the published Fig. 4 model")
+```
+
+No Competitor is dropped from every model below. With components paired 1:1
+there are no component-sharing pairs, so neither `top_match` nor `bottom_match`
+is defined. This is not a missing-data problem; it is the design.
+
+## 3. Test 1 — distribution of the signed index
+
+The model (§2.6) says the across-trial tie between `u_T` and `u_B` is broken by
+accumulated strength alone, so each dyad commits to a dimension: arbitrary
+*between* dyads, stable *within* dyad.
+
+The diagnostic separates the **mean** from the **variance**, because the
+published unsigned result already guarantees a larger spread in across-trial.
+Larger variance alone is therefore not evidence of anything.
+
+- **Commitment**: population mean ≈ 0, dyad-level SD large.
+- **Population-level salience bias**: mean ≫ 0 (or ≪ 0). The model would then
+  need the free dimension prior flagged in §5, and "arbitrary" is wrong.
+- **No commitment**: mean ≈ 0 and SD small.
+
+```{r test1-dyad-index}
+dyad_index <- shape_sim |>
+  filter(contextStructure_f != "No Competitor") |>
+  group_by(gameID, contextStructure_f) |>
+  summarize(dim_index = mean(dim_index, na.rm = TRUE),
+            n_shapes  = n(), .groups = "drop") |>
+  mutate(contextStructure_f = droplevels(contextStructure_f))
+
+dyad_index_final <- shape_sim |>
+  filter(contextStructure_f != "No Competitor", repNum1 == FINAL_BLOCK) |>
+  group_by(gameID, contextStructure_f) |>
+  summarize(dim_index = mean(dim_index, na.rm = TRUE), .groups = "drop") |>
+  mutate(contextStructure_f = droplevels(contextStructure_f))
+
+bind_rows(
+  dyad_index       |> mutate(window = "all blocks"),
+  dyad_index_final |> mutate(window = "final block")
+) |>
+  group_by(window, contextStructure_f) |>
+  summarize(n = n(),
+            mean  = mean(dim_index),
+            sd    = sd(dim_index),
+            mean_abs = mean(abs(dim_index)),
+            prop_top_indexing = mean(dim_index > 0),
+            .groups = "drop") |>
+  mutate(across(where(is.numeric), ~ round(., 4))) |>
+  kable(caption = "Mean vs SD of the signed index. Commitment predicts mean near 0 with large SD in Across Trial.")
+```
+
+Is the mean distinguishable from zero, and is the dyad-level SD larger in
+across-trial? The second is a variance-ratio test; the first is a one-sample
+test per condition.
+
+```{r test1-tests}
+dyad_index_final |>
+  group_by(contextStructure_f) |>
+  summarize(t = list(broom::tidy(t.test(dim_index))), .groups = "drop") |>
+  unnest(t) |>
+  select(contextStructure_f, estimate, conf.low, conf.high, p.value) |>
+  mutate(across(where(is.numeric), ~ round(., 4))) |>
+  kable(caption = "Is the population mean index zero? (final block)")
+
+var.test(dim_index ~ contextStructure_f, data = dyad_index_final)
+```
+
+### Bimodality
+
+Hand-rolled bimodality coefficient so the notebook has no new dependencies.
+`BC > 0.555` is the conventional flag. Hartigan's dip test is the better
+instrument and runs if `diptest` is installed.
+
+```{r test1-bimodality}
+bimodality_coef <- function(x) {
+  x <- x[is.finite(x)]
+  n <- length(x)
+  if (n < 4) return(NA_real_)
+  m <- mean(x); s <- sd(x)
+  skew <- sum((x - m)^3) / (n * s^3)
+  kurt <- sum((x - m)^4) / (n * s^4) - 3
+  (skew^2 + 1) / (kurt + 3 * (n - 1)^2 / ((n - 2) * (n - 3)))
+}
+
+dyad_index_final |>
+  group_by(contextStructure_f) |>
+  summarize(n = n(),
+            bimodality_coef = round(bimodality_coef(dim_index), 3),
+            dip_p = if (requireNamespace("diptest", quietly = TRUE)) {
+              round(diptest::dip.test(dim_index)$p.value, 4)
+            } else NA_real_,
+            .groups = "drop") |>
+  kable(caption = "Bimodality. BC > 0.555 is the conventional threshold.")
+
+if (!requireNamespace("diptest", quietly = TRUE)) {
+  message("For Hartigan's dip test: install.packages('diptest')")
+}
+```
+
+```{r test1-plot}
+#| fig-width: 9
+#| fig-height: 4
+p_dist <- dyad_index_final |>
+  ggplot(aes(x = dim_index, fill = contextStructure_f)) +
+  geom_histogram(bins = 30, alpha = .85, colour = "white") +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey30") +
+  facet_wrap(~ contextStructure_f) +
+  scale_fill_manual(values = color_map, guide = "none") +
+  labs(x = "sim(top-match) - sim(bottom-match)",
+       y = "Dyads",
+       title = "Signed dimension index, final block",
+       subtitle = "Commitment predicts two modes away from zero in Across Trial")
+
+p_dist
+ggsave(file.path(fig_path, "dim_index_distribution.png"), p_dist,
+       width = 9, height = 4, dpi = 300)
+```
+
+## 4. Test 2 — does early commitment predict late commitment?
+
+The magnitude-robust test. Rich-get-richer says the dimension a dyad lands on
+early should be the one it keeps, and that the lock-in is stronger in
+across-trial, where nothing but accumulation breaks the tie. In within-trial
+both dimensions are forced, so there is less to lock in.
+
+Two measures: the correlation of block-1 with block-4 index, and plain sign
+agreement (which does not scale with effect magnitude).
+
+```{r test2}
+by_block <- shape_sim |>
+  filter(contextStructure_f != "No Competitor",
+         repNum1 %in% c(0, FINAL_BLOCK)) |>
+  group_by(gameID, contextStructure_f, repNum1) |>
+  summarize(dim_index = mean(dim_index, na.rm = TRUE), .groups = "drop") |>
+  mutate(block = if_else(repNum1 == 0, "block1", "block4")) |>
+  select(-repNum1) |>
+  pivot_wider(names_from = block, values_from = dim_index) |>
+  filter(!is.na(block1), !is.na(block4)) |>
+  mutate(contextStructure_f = droplevels(contextStructure_f),
+         sign_agree = sign(block1) == sign(block4))
+
+by_block |>
+  group_by(contextStructure_f) |>
+  summarize(n = n(),
+            pearson  = round(cor(block1, block4), 3),
+            spearman = round(cor(block1, block4, method = "spearman"), 3),
+            prop_sign_agree = round(mean(sign_agree), 3),
+            .groups = "drop") |>
+  kable(caption = "Block 1 -> block 4 stability. Commitment predicts higher values in Across Trial.")
+
+# Sign agreement against chance, per condition
+by_block |>
+  group_by(contextStructure_f) |>
+  summarize(b = list(broom::tidy(binom.test(sum(sign_agree), n()))),
+            .groups = "drop") |>
+  unnest(b) |>
+  select(contextStructure_f, estimate, conf.low, conf.high, p.value) |>
+  mutate(across(where(is.numeric), ~ round(., 4))) |>
+  kable(caption = "Sign agreement vs. 0.5 chance")
+
+# Does condition moderate the early->late relationship?
+summary(lm(block4 ~ block1 * contextStructure_f, data = by_block))
+```
+
+Low-magnitude dyads contribute mostly noise to sign agreement, so split by
+how strongly the dyad indexes at all.
+
+```{r test2-by-magnitude}
+by_block |>
+  mutate(magnitude = ntile(abs(block1), 3),
+         magnitude = factor(magnitude, labels = c("weak", "mid", "strong"))) |>
+  group_by(contextStructure_f, magnitude) |>
+  summarize(n = n(), prop_sign_agree = round(mean(sign_agree), 3),
+            .groups = "drop") |>
+  kable(caption = "Sign agreement by block-1 index magnitude")
+```
+
+```{r test2-plot}
+#| fig-width: 7
+#| fig-height: 4
+p_stability <- by_block |>
+  ggplot(aes(x = block1, y = block4, colour = contextStructure_f)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey70") +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey70") +
+  geom_point(alpha = .5) +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_colour_manual(values = color_map, name = NULL) +
+  labs(x = "Dimension index, block 1", y = "Dimension index, block 4",
+       title = "Does a dyad keep the dimension it started with?")
+
+p_stability
+ggsave(file.path(fig_path, "dim_index_stability.png"), p_stability,
+       width = 7, height = 4, dpi = 300)
+```
+
+## 5. Test 3 — dedicated component labels (lexical, no embeddings)
+
+An independent measure of the same claim that uses no embeddings at all, so
+R2's objection to similarity measures does not reach it (`model-design.md` §3,
+design doc §3 item 6).
+
+A component has a **dedicated label** for a dyad if some word appears in the
+dyad's final-block descriptions of at least two shapes containing that
+component, and in no description of a shape lacking it. Counting dedicated
+components per dyad estimates the size of its primitive lexicon.
+
+Model predictions (`model-design.md` §1.2): **Within Trial ≈ 8** dedicated
+components, **Across Trial ≈ 4 and concentrated on one role**, and the measure
+is **structurally undefined for No Competitor** — each component appears in
+exactly one shape, so `n_with ≥ 2` is unreachable. That last point is the
+vocabulary-cost argument, not a null result, and is reported as such.
+
+```{r test3-tokens}
+#| message: false
+stop_words_small <- c(
+  "the","a","an","and","or","but","if","then","than","that","this","these",
+  "those","is","are","was","were","be","been","being","it","its","of","to",
+  "in","on","at","by","for","with","from","as","into","like","looks","look",
+  "shape","shapes","one","two","side","sides","has","have","there","thing",
+  "kind","sort","bit","more","most","very","really","sort","i","you","we",
+  "think","maybe","something","left","right","top","bottom","upper","lower"
+)
+
+final_msgs <- d_chat_f |>
+  filter(as.character(director_msg) == "TRUE",
+         as.character(chit_chat) == "FALSE") |>
+  inner_join(d_round_f |> select(roundID, gameID, target, repNum),
+             by = "roundID") |>
+  filter(repNum == FINAL_BLOCK) |>
+  group_by(gameID, target) |>
+  summarize(text = paste(text, collapse = " "), .groups = "drop") |>
+  left_join(d_game_f |> select(gameID, contextStructure_f), by = "gameID") |>
+  mutate(top    = str_extract(target, "(?<=/)[^/]+(?=_)"),
+         bottom = str_extract(target, "(?<=_)[^_]+(?=\\.png)"))
+
+tokens <- final_msgs |>
+  mutate(word = str_split(str_to_lower(text), "[^a-z]+")) |>
+  unnest(word) |>
+  filter(nchar(word) >= 3, !word %in% stop_words_small) |>
+  distinct(gameID, contextStructure_f, target, top, bottom, word)
+
+cat("Dyads with final-block descriptions:", n_distinct(tokens$gameID), "\n")
+```
+
+```{r test3-dedicated}
+# Long form: one row per (dyad, shape, component role, component id, word)
+shape_components <- tokens |>
+  pivot_longer(c(top, bottom), names_to = "role", values_to = "component")
+
+# For each (dyad, role, component, word): shapes containing the component that
+# use the word, vs shapes lacking it that use the word.
+n_with <- shape_components |>
+  count(gameID, contextStructure_f, role, component, word, name = "n_with")
+
+# Total uses of each word by the dyad, per role, to derive n_without
+n_total <- shape_components |>
+  distinct(gameID, role, target, word) |>
+  count(gameID, role, word, name = "n_total")
+
+dedicated <- n_with |>
+  left_join(n_total, by = c("gameID", "role", "word")) |>
+  mutate(n_without = n_total - n_with,
+         is_dedicated = n_with >= 2 & n_without == 0)
+
+component_level <- dedicated |>
+  group_by(gameID, contextStructure_f, role, component) |>
+  summarize(has_dedicated = any(is_dedicated), .groups = "drop")
+
+dyad_lexicon <- component_level |>
+  group_by(gameID, contextStructure_f, role) |>
+  summarize(n_dedicated = sum(has_dedicated), .groups = "drop") |>
+  pivot_wider(names_from = role, values_from = n_dedicated,
+              names_prefix = "dedicated_", values_fill = 0) |>
+  mutate(lexicon_size = dedicated_top + dedicated_bottom,
+         lexical_commitment = if_else(
+           lexicon_size > 0,
+           (dedicated_top - dedicated_bottom) / lexicon_size,
+           NA_real_))
+
+dyad_lexicon |>
+  group_by(contextStructure_f) |>
+  summarize(n = n(),
+            mean_dedicated_top    = round(mean(dedicated_top), 2),
+            mean_dedicated_bottom = round(mean(dedicated_bottom), 2),
+            mean_lexicon_size     = round(mean(lexicon_size), 2),
+            mean_abs_commitment   = round(mean(abs(lexical_commitment),
+                                               na.rm = TRUE), 3),
+            .groups = "drop") |>
+  kable(caption = "Dedicated component labels per dyad. Predicted: Within ~8, Across ~4 on one role, No Competitor structurally 0.")
+```
+
+Within-trial descriptions are longer, which mechanically affords more
+candidate words. Report length alongside, and covary it.
+
+```{r test3-length-control}
+dyad_length <- final_msgs |>
+  mutate(n_words = str_count(text, "\\S+")) |>
+  group_by(gameID) |>
+  summarize(mean_words = mean(n_words), .groups = "drop")
+
+lex_model_data <- dyad_lexicon |>
+  left_join(dyad_length, by = "gameID") |>
+  filter(contextStructure_f != "No Competitor") |>
+  mutate(contextStructure_f = relevel(droplevels(contextStructure_f),
+                                      ref = "Within Trial"))
+
+summary(lm(lexicon_size ~ contextStructure_f + scale(mean_words),
+           data = lex_model_data))
+```
+
+### Cross-validation: do the lexical and embedding measures agree?
+
+The strongest version of §5. `lexical_commitment` and `dim_index` are computed
+from disjoint information — word identity versus SBERT similarity. If both say
+the same dyads index tops, that is hard to get by accident.
+
+```{r test3-crossvalidate}
+crossval <- dyad_lexicon |>
+  inner_join(dyad_index_final, by = c("gameID", "contextStructure_f")) |>
+  filter(!is.na(lexical_commitment))
+
+crossval |>
+  group_by(contextStructure_f) |>
+  summarize(n = n(),
+            pearson = round(cor(lexical_commitment, dim_index), 3),
+            spearman = round(cor(lexical_commitment, dim_index,
+                                 method = "spearman"), 3),
+            sign_agree = round(mean(sign(lexical_commitment) ==
+                                      sign(dim_index)), 3),
+            .groups = "drop") |>
+  kable(caption = "Agreement between the lexical and embedding indices")
+```
+
+```{r test3-plot}
+#| fig-width: 7
+#| fig-height: 4
+#| warning: false
+p_crossval <- crossval |>
+  ggplot(aes(x = lexical_commitment, y = dim_index,
+             colour = contextStructure_f)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey70") +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey70") +
+  geom_jitter(width = .03, alpha = .55) +
+  geom_smooth(method = "lm", se = TRUE) +
+  scale_colour_manual(values = color_map, name = NULL) +
+  labs(x = "Lexical commitment  (dedicated tops - bottoms) / total",
+       y = "Embedding dimension index",
+       title = "Two independent measures of the same claim")
+
+p_crossval
+ggsave(file.path(fig_path, "dim_index_crossvalidation.png"), p_crossval,
+       width = 7, height = 4, dpi = 300)
+```
+
+## 6. Annotation gold set
+
+The 478 hand-coded items are only ~10 dyads per condition and cover final-round
+descriptions only, so they cannot carry Test 1 or Test 2. They do provide a
+validity check: dyads the annotations call top-only versus bottom-only should
+fall on the corresponding side of `dim_index`.
+
+```{r annotations}
+#| message: false
+annot_files <- list.files(file.path(data_root, "annotation_data"),
+                          pattern = "\\.csv$", full.names = TRUE)
+
+d_annot <- map_dfr(annot_files, read.csv) |>
+  inner_join(d_round_f |> select(roundID, gameID, repNum), by = "roundID") |>
+  left_join(d_game_f |> select(gameID, contextStructure_f), by = "gameID") |>
+  filter(annotation != "idk")
+
+cat("Annotated items:", nrow(d_annot),
+    "across", n_distinct(d_annot$gameID), "dyads\n")
+
+annot_commitment <- d_annot |>
+  filter(annotation %in% c("top", "bottom")) |>
+  group_by(gameID, contextStructure_f) |>
+  summarize(n_single = n(),
+            annot_top_share = mean(annotation == "top"), .groups = "drop") |>
+  filter(n_single >= 3)
+
+annot_commitment |>
+  inner_join(dyad_index, by = c("gameID", "contextStructure_f")) |>
+  group_by(contextStructure_f) |>
+  summarize(n = n(),
+            cor_with_dim_index = round(cor(annot_top_share, dim_index), 3),
+            .groups = "drop") |>
+  kable(caption = "Annotator-coded top share vs. embedding index (small n; validity check only)")
+```
+
+## 7. Verdict
+
+Fill this in after running. The model-design decisions each test can falsify:
+
+| Test | Supports §2.6 if | Falsifies §2.6 if |
+|---|---|---|
+| 1. Distribution | Across Trial mean ≈ 0, SD large, BC > 0.555 | SD comparable to Within Trial, or mean far from 0 (a population salience bias, not commitment) |
+| 2. Block 1 → 4 | sign agreement ≫ .5 and higher than Within Trial | agreement ≈ .5, i.e. the dimension is re-chosen each block |
+| 3. Dedicated labels | Across ≈ 4 concentrated on one role; Within ≈ 8 balanced | Across ≈ 8, or no role concentration |
+| Cross-validation | lexical and embedding indices agree in sign | no relationship — one of the two measures is not measuring commitment |
+
+A unimodal across-trial distribution with sign agreement at chance falsifies
+the rich-get-richer credit rule in `model-design.md` §2.6, and with it the
+asymmetric-generalization prediction in §6. That outcome should be recorded
+here and the model revised before any simulation code is written.
+
+```{r session}
+sessionInfo()
+```
